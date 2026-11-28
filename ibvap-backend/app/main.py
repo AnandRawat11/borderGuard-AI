@@ -28,7 +28,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from .database import Base, engine, get_db, ensure_schema_compatibility
-from . import models, schemas, security, ledger, seed, video_stream, rule_engine, backup_service, recommendation_service, feature_flags
+from . import models, schemas, security, ledger, seed, video_stream, rule_engine, model_registry, backup_service, terrain_service, recommendation_service, feature_flags
 from .ws_manager import manager
 
 # Security assertion for production deployments (FR-6.1)
@@ -515,6 +515,7 @@ async def on_startup():
     db = next(get_db())
     try:
         seed.run_seed(db)
+        model_registry.registry.sync_from_db(db)
     finally:
         db.close()
 
@@ -686,7 +687,7 @@ def ready(response: Response, db: Session = Depends(get_db)):
     except Exception:
         db_ready = False
 
-    model_ready = True
+    model_ready = model_registry.registry.is_loaded
     active_streams = list(video_stream.generators.keys()) + list(video_stream.workers.keys())
     is_ready = db_ready and model_ready and len(active_streams) > 0
 
@@ -734,6 +735,7 @@ def get_metrics(
         "total_alerts": alerts_query.count(),
         "active_ws_clients": len(manager.active),
         "camera_workers": len(video_stream.workers),
+        "model_registry": model_registry.registry.get_status(),
         "c2_telemetry": {
             "delivered_count": len(rule_engine.c2_delivery_log),
             "dead_letter_count": len(rule_engine.c2_retry_queue),
@@ -2278,6 +2280,47 @@ def get_alert_evidence(
         "has_snapshot": snapshot is not None,
         "snapshot": snapshot,
     }
+
+
+# ---------------------------------------------------------------------------
+# GIS Terrain Enrichment (PRD v1 FR-6)
+# ---------------------------------------------------------------------------
+@app.get("/api/alerts/{alert_id}/terrain", response_model=schemas.TerrainEnrichmentOut)
+def get_alert_terrain(
+    alert_id: str,
+    db: Session = Depends(get_db),
+    user_payload: Dict[str, Any] = Depends(security.require_role("operator", allow_guest_operator=True))
+):
+    alert = db.query(models.Alert).filter(models.Alert.id == alert_id).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+
+    security.validate_site_access(user_payload, alert.site_id)
+    terrain = db.query(models.TerrainEnrichment).filter(models.TerrainEnrichment.alert_id == alert_id).first()
+    if not terrain:
+        terrain = terrain_service.enrich_alert_terrain(db, alert)
+    return terrain
+
+
+@app.post("/api/alerts/{alert_id}/enrich", response_model=schemas.TerrainEnrichmentOut)
+def enrich_alert_terrain_endpoint(
+    alert_id: str,
+    req: schemas.TerrainEnrichRequest = schemas.TerrainEnrichRequest(),
+    db: Session = Depends(get_db),
+    user_payload: Dict[str, Any] = Depends(security.require_role("operator", allow_guest_operator=True))
+):
+    alert = db.query(models.Alert).filter(models.Alert.id == alert_id).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+
+    security.validate_site_access(user_payload, alert.site_id)
+    return terrain_service.enrich_alert_terrain(
+        db,
+        alert,
+        lat_override=req.latitude,
+        lon_override=req.longitude,
+        dataset_source=req.dataset_source
+    )
 
 
 # ---------------------------------------------------------------------------
