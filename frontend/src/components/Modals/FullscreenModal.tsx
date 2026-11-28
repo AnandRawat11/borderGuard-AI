@@ -40,7 +40,7 @@ export const FullscreenModal: React.FC = () => {
     >
       {/* Top Header */}
       <div className="absolute top-0 left-0 right-0 z-[301] flex items-center gap-3 p-3.5 px-5 bg-gradient-to-b from-black/90 to-transparent">
-        <div className="flex-1 font-bold font-display text-sm md:text-base text-rind-100 truncate">
+        <div className="flex-1 font-bold font-display text-sm md:text-base text-white truncate">
           {cam.name} &mdash; {cam.location}
         </div>
         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-instrument-d border border-instrument-400/30 text-instrument-400 text-[10px] font-bold">
@@ -50,7 +50,7 @@ export const FullscreenModal: React.FC = () => {
         <button
           onClick={closeFullscreen}
           aria-label="Exit fullscreen view"
-          className="w-8 h-8 rounded-rad3 border border-rind-500/20 bg-black/50 text-rind-300 hover:bg-melon-d hover:text-melon-500 flex items-center justify-center text-base transition-colors"
+          className="w-8 h-8 rounded-rad3 border border-rind-500/20 bg-black/50 text-white hover:bg-melon-d hover:text-melon-500 flex items-center justify-center text-base transition-colors"
         >
           <i className="ti ti-x"></i>
         </button>

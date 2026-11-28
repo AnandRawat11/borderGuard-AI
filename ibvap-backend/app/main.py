@@ -1,5 +1,7 @@
 import io
 import csv
+import json
+import re
 import random
 import string
 import asyncio
@@ -7,6 +9,9 @@ import os
 import hashlib
 import base64
 import secrets
+import threading
+import urllib.request
+import urllib.error
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 
@@ -19,10 +24,11 @@ import numpy as np
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, Response, status, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, HTMLResponse
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from . import models, schemas, security, ledger, seed, video_stream, rule_engine, model_registry, evaluation, backup_service, governance, terrain_service, recommendation_service, anchor_service, blockchain_provider, merkle_engine, provenance_service, multisig_service, feature_flags
 from .database import Base, engine, get_db, ensure_schema_compatibility
+from . import models, schemas, security, ledger, seed, video_stream, rule_engine, backup_service, recommendation_service, feature_flags
 from .ws_manager import manager
 
 # Security assertion for production deployments (FR-6.1)
@@ -509,7 +515,6 @@ async def on_startup():
     db = next(get_db())
     try:
         seed.run_seed(db)
-        model_registry.registry.sync_from_db(db)
     finally:
         db.close()
 
@@ -558,7 +563,6 @@ async def on_startup():
                     "total_alerts": 0,
                     "active_ws_clients": len(manager.active),
                     "camera_workers": len(video_stream.workers),
-                    "model_registry": model_registry.registry.summary(),
                     "worker_telemetry": worker_telemetry
                 }
                 await manager.broadcast_telemetry(payload)
@@ -682,7 +686,7 @@ def ready(response: Response, db: Session = Depends(get_db)):
     except Exception:
         db_ready = False
 
-    model_ready = model_registry.registry.is_loaded
+    model_ready = True
     active_streams = list(video_stream.generators.keys()) + list(video_stream.workers.keys())
     is_ready = db_ready and model_ready and len(active_streams) > 0
 
@@ -730,7 +734,6 @@ def get_metrics(
         "total_alerts": alerts_query.count(),
         "active_ws_clients": len(manager.active),
         "camera_workers": len(video_stream.workers),
-        "model_registry": model_registry.registry.get_status(),
         "c2_telemetry": {
             "delivered_count": len(rule_engine.c2_delivery_log),
             "dead_letter_count": len(rule_engine.c2_retry_queue),
@@ -742,30 +745,232 @@ def get_metrics(
 # ---------------------------------------------------------------------------
 # Auth (FR-1, FR-2)
 # ---------------------------------------------------------------------------
+def _supabase_auth_config() -> Tuple[str, str]:
+    url = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
+    key = os.getenv("SUPABASE_PUBLISHABLE_KEY", "").strip()
+    return url, key
+
+
+def _authenticate_with_supabase(identifier: str, password: str) -> Optional[Dict[str, Any]]:
+    supabase_url, supabase_key = _supabase_auth_config()
+    if not supabase_url or not supabase_key or "@" not in identifier:
+        return None
+    payload = json.dumps({"email": identifier, "password": password}).encode("utf-8")
+    req = urllib.request.Request(
+        f"{supabase_url}/auth/v1/token?grant_type=password",
+        data=payload,
+        headers={
+            "apikey": supabase_key,
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            if resp.status == 200:
+                data = json.loads(resp.read().decode("utf-8"))
+                return data.get("user") or data
+    except Exception:
+        return None
+    return None
+
+
+def _signup_with_supabase(email: str, password: str, username: str) -> None:
+    supabase_url, supabase_key = _supabase_auth_config()
+    if not supabase_url or not supabase_key or not email:
+        return
+    payload = json.dumps({
+        "email": email,
+        "password": password,
+        "data": {"username": username},
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        f"{supabase_url}/auth/v1/signup",
+        data=payload,
+        headers={
+            "apikey": supabase_key,
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=6):
+            pass
+    except Exception:
+        # Best-effort sync; PostgreSQL account creation remains authoritative.
+        pass
+
+
+def _derive_unique_username(db: Session, candidate: str) -> str:
+    base = re.sub(r"[^a-zA-Z0-9._-]", "_", (candidate or "").strip())[:48] or "officer"
+    if not db.query(models.User).filter(func.lower(models.User.username) == base.lower()).first():
+        return base
+    for i in range(1, 1000):
+        candidate_name = f"{base}_{i}"
+        if not db.query(models.User).filter(func.lower(models.User.username) == candidate_name.lower()).first():
+            return candidate_name
+    return f"{base}_{secrets.token_hex(3)}"
+
+
+def _ensure_default_site_memberships(db: Session, user: models.User, commit: bool = True) -> List[str]:
+    if user.role == "admin":
+        return ["*"]
+    existing = {
+        m.site_id
+        for m in db.query(models.SiteMembership).filter(models.SiteMembership.user_id == user.id).all()
+    }
+    sites = db.query(models.Site).all()
+    changed = False
+    for site in sites:
+        if site.id not in existing:
+            db.add(models.SiteMembership(
+                user_id=user.id,
+                site_id=site.id,
+                role=user.role,
+                status="active",
+            ))
+            changed = True
+    if changed and commit:
+        db.commit()
+    return [site.id for site in sites] or ["site-alpha", "site-bravo"]
+
+
 @app.post("/auth/login", response_model=schemas.TokenResponse)
 def login(body: schemas.LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.username == body.username).first()
-    if not user:
+    identifier = (body.username or "").strip()
+    if not identifier or not body.password:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    security.check_lockout(user)
+    ident_lower = identifier.lower()
+    user = db.query(models.User).filter(
+        or_(
+            func.lower(models.User.username) == ident_lower,
+            func.lower(models.User.email) == ident_lower,
+        )
+    ).first()
 
-    if not security.verify_password(body.password, user.hashed_password):
+    if user:
+        security.check_lockout(user)
+        if security.verify_password(body.password, user.hashed_password):
+            security.reset_failed_attempts(user, db)
+            write_audit(db, user.username, "login")
+            site_ids = security.resolve_user_site_ids(db, user)
+            token = security.create_access_token(user.username, user.role, site_ids=site_ids)
+            return schemas.TokenResponse(
+                access_token=token,
+                role=user.role,
+                username=user.username,
+                site_ids=site_ids,
+                email=user.email,
+            )
+
+    supabase_user = _authenticate_with_supabase(identifier, body.password)
+    if supabase_user:
+        email_val = (supabase_user.get("email") or identifier).strip().lower()
+        meta = supabase_user.get("user_metadata") or {}
+        app_meta = supabase_user.get("app_metadata") or {}
+        requested_role = str(app_meta.get("role") or "operator").lower()
+        role = requested_role if requested_role in ("operator", "supervisor", "admin") else "operator"
+        if user:
+            user.hashed_password = security.hash_password(body.password)
+            if not user.email and "@" in email_val:
+                user.email = email_val
+            security.reset_failed_attempts(user, db)
+        else:
+            preferred_name = str(meta.get("username") or email_val.split("@")[0] or "officer")
+            username = _derive_unique_username(db, preferred_name)
+            user = models.User(
+                username=username,
+                email=email_val,
+                hashed_password=security.hash_password(body.password),
+                role=role,
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+            _ensure_default_site_memberships(db, user)
+
+        write_audit(db, user.username, "login")
+        site_ids = security.resolve_user_site_ids(db, user)
+        token = security.create_access_token(user.username, user.role, site_ids=site_ids)
+        return schemas.TokenResponse(
+            access_token=token,
+            role=user.role,
+            username=user.username,
+            site_ids=site_ids,
+            email=user.email,
+        )
+
+    if user:
         security.register_failed_attempt(user, db)
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+    raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    security.reset_failed_attempts(user, db)
-    write_audit(db, user.username, "login")
 
-    # Resolve site scope dynamically from persisted SiteMembership records (FR-1.2)
-    site_ids = security.resolve_user_site_ids(db, user)
+@app.post("/auth/register", response_model=schemas.TokenResponse)
+def register(body: schemas.RegisterRequest, db: Session = Depends(get_db)):
+    username = (body.username or "").strip()
+    if len(username) < 3 or len(username) > 64 or not re.fullmatch(r"[A-Za-z0-9._-]+", username):
+        raise HTTPException(
+            status_code=422,
+            detail="Username must be 3-64 characters using letters, numbers, dots, hyphens, or underscores.",
+        )
+    if not body.password or len(body.password) < 6:
+        raise HTTPException(status_code=422, detail="Password must be at least 6 characters long.")
+
+    email = (body.email or "").strip().lower() or None
+    if email and "@" not in email:
+        raise HTTPException(status_code=422, detail="Please enter a valid email address.")
+
+    dup_filters = [func.lower(models.User.username) == username.lower()]
+    if email:
+        dup_filters.append(func.lower(models.User.email) == email)
+    existing = db.query(models.User).filter(or_(*dup_filters)).first()
+    if existing:
+        if existing.username.lower() == username.lower():
+            raise HTTPException(status_code=409, detail="Username already exists.")
+        raise HTTPException(status_code=409, detail="An account with that email already exists.")
+
+    user = models.User(
+        username=username,
+        email=email,
+        hashed_password=security.hash_password(body.password),
+        role="operator",
+    )
+    db.add(user)
+    db.flush()
+
+    sites = db.query(models.Site).all()
+    for site in sites:
+        db.add(models.SiteMembership(
+            user_id=user.id,
+            site_id=site.id,
+            role="operator",
+            status="active",
+        ))
+    site_ids = [site.id for site in sites] or ["site-alpha", "site-bravo"]
+    db.add(models.AuditLog(username=user.username, site_id="site-alpha", action="register"))
+    db.commit()
+
+    if email:
+        threading.Thread(
+            target=_signup_with_supabase,
+            args=(email, body.password, username),
+            daemon=True,
+        ).start()
+
     token = security.create_access_token(user.username, user.role, site_ids=site_ids)
-    return schemas.TokenResponse(access_token=token, role=user.role, username=user.username, site_ids=site_ids)
+    return schemas.TokenResponse(
+        access_token=token,
+        role=user.role,
+        username=user.username,
+        site_ids=site_ids,
+        email=user.email,
+    )
 
 
 @app.get("/auth/me")
 def get_me(user: models.User = Depends(security.get_current_user)):
-    return {"username": user.username, "role": user.role}
+    return {"username": user.username, "role": user.role, "email": user.email}
 
 
 # ---------------------------------------------------------------------------
@@ -2041,8 +2246,8 @@ def get_quality_feedback_report(
         resolved_count=resolved,
         false_positive_count=false_positives,
         false_positive_rate=fp_rate,
-        avg_acknowledgement_time_sec=14.2,
-        avg_resolution_time_sec=45.8,
+        avg_acknowledgement_time_sec=0.0,
+        avg_resolution_time_sec=0.0,
         reason_breakdown=reasons,
         generated_at=datetime.utcnow()
     )
@@ -2076,53 +2281,6 @@ def get_alert_evidence(
 
 
 # ---------------------------------------------------------------------------
-# GIS Terrain Enrichment (PRD v1 FR-6)
-# ---------------------------------------------------------------------------
-@app.get("/api/alerts/{alert_id}/terrain", response_model=schemas.TerrainEnrichmentOut)
-def get_alert_terrain(
-    alert_id: str,
-    db: Session = Depends(get_db),
-    user_payload: Dict[str, Any] = Depends(security.require_role("operator", allow_guest_operator=True))
-):
-    """Get spatial and topographic terrain enrichment for an alert."""
-    alert = db.query(models.Alert).filter(models.Alert.id == alert_id).first()
-    if not alert:
-        raise HTTPException(status_code=404, detail="Alert not found")
-
-    security.validate_site_access(user_payload, alert.site_id)
-
-    terrain = db.query(models.TerrainEnrichment).filter(models.TerrainEnrichment.alert_id == alert_id).first()
-    if not terrain:
-        terrain = terrain_service.enrich_alert_terrain(db, alert)
-
-    return terrain
-
-
-@app.post("/api/alerts/{alert_id}/enrich", response_model=schemas.TerrainEnrichmentOut)
-def enrich_alert_terrain_endpoint(
-    alert_id: str,
-    req: schemas.TerrainEnrichRequest = schemas.TerrainEnrichRequest(),
-    db: Session = Depends(get_db),
-    user_payload: Dict[str, Any] = Depends(security.require_role("operator", allow_guest_operator=True))
-):
-    """Trigger or refresh GIS terrain enrichment for an alert with coordinate parameters."""
-    alert = db.query(models.Alert).filter(models.Alert.id == alert_id).first()
-    if not alert:
-        raise HTTPException(status_code=404, detail="Alert not found")
-
-    security.validate_site_access(user_payload, alert.site_id)
-
-    terrain = terrain_service.enrich_alert_terrain(
-        db,
-        alert,
-        lat_override=req.latitude,
-        lon_override=req.longitude,
-        dataset_source=req.dataset_source
-    )
-    return terrain
-
-
-# ---------------------------------------------------------------------------
 # Tactical Recommendations & Correlation (PRD v1 FR-7)
 # ---------------------------------------------------------------------------
 @app.get("/api/alerts/{alert_id}/recommendation", response_model=schemas.RecommendationOut)
@@ -2141,10 +2299,7 @@ def get_alert_recommendation(
 
     rec = db.query(models.Recommendation).filter(models.Recommendation.alert_id == alert_id).first()
     if not rec:
-        terrain = db.query(models.TerrainEnrichment).filter(models.TerrainEnrichment.alert_id == alert_id).first()
-        if not terrain:
-            terrain = terrain_service.enrich_alert_terrain(db, alert)
-        rec = recommendation_service.generate_tactical_recommendation(db, alert, terrain)
+        rec = recommendation_service.generate_tactical_recommendation(db, alert, None)
 
     return rec
 
@@ -2209,82 +2364,6 @@ def export_alerts_csv(
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=ibvap_alerts_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"}
     )
-
-
-# ---------------------------------------------------------------------------
-# Model Lifecycle & Promotion / Rollback (FR-3)
-# ---------------------------------------------------------------------------
-@app.get("/api/models/status")
-def get_model_status():
-    return model_registry.registry.get_status()
-
-
-@app.post("/api/models/stage", response_model=schemas.ModelDeploymentOut)
-def stage_model(
-    body: schemas.ModelDeploymentCreate,
-    user_payload: Dict[str, Any] = Depends(security.require_role("supervisor"))
-):
-    dep = model_registry.registry.stage_deployment(
-        version=body.version,
-        name=body.name,
-        artifact_hash=body.artifact_hash,
-        class_map=body.class_map,
-        thresholds=body.thresholds,
-        device=body.device
-    )
-    return dep
-
-
-@app.post("/api/models/promote")
-def promote_model(
-    body: schemas.ModelPromotionRequest,
-    user_payload: Dict[str, Any] = Depends(security.require_role("admin"))
-):
-    dep = model_registry.registry.promote_version(
-        to_version=body.to_version,
-        approved_by=user_payload.get("sub", "admin"),
-        reason=body.reason
-    )
-    return {"status": "promoted", "active_version": dep["version"], "approved_by": dep["approved_by"]}
-
-
-@app.post("/api/models/rollback")
-def rollback_model(
-    body: schemas.ModelRollbackRequest,
-    user_payload: Dict[str, Any] = Depends(security.require_role("admin"))
-):
-    dep = model_registry.registry.rollback_version(
-        target_version=body.target_version,
-        approved_by=user_payload.get("sub", "admin"),
-        reason=body.reason
-    )
-    return {"status": "rolled_back", "active_version": dep["version"], "approved_by": dep["approved_by"]}
-
-
-# ---------------------------------------------------------------------------
-# Field Evaluation & Benchmarks (FR-4)
-# ---------------------------------------------------------------------------
-@app.get("/api/evaluation/datasets", response_model=List[schemas.EvaluationDatasetOut])
-def list_eval_datasets(user_payload: Dict[str, Any] = Depends(security.require_role("operator", allow_guest_operator=True))):
-    return evaluation.eval_engine.list_datasets()
-
-
-@app.post("/api/evaluation/run", response_model=schemas.EvaluationReportOut)
-def run_evaluation(
-    body: schemas.EvaluationRunRequest,
-    user_payload: Dict[str, Any] = Depends(security.require_role("supervisor"))
-):
-    report = evaluation.eval_engine.run_evaluation(
-        dataset_id=body.dataset_id,
-        model_version=body.model_version,
-        approved_by=user_payload.get("sub")
-    )
-    return report
-
-
-@app.get("/api/evaluation/reports", response_model=List[schemas.EvaluationReportOut])
-def list_eval_reports(user_payload: Dict[str, Any] = Depends(security.require_role("operator", allow_guest_operator=True))):
-    return evaluation.eval_engine.list_reports()
 
 
 @app.post("/api/alerts/{alert_id}/legal-hold", response_model=schemas.LegalHoldOut)
@@ -2390,36 +2469,6 @@ def trigger_retention_cleanup(
 
 
 # ---------------------------------------------------------------------------
-# Privacy & Governance (FR-10)
-# ---------------------------------------------------------------------------
-@app.get("/api/governance/status", response_model=schemas.GovernanceStatusOut)
-def get_governance_status(
-    site_id: str = Query(default="site-alpha"),
-    db: Session = Depends(get_db),
-    user_payload: Dict[str, Any] = Depends(security.require_role("operator", allow_guest_operator=True))
-):
-    return governance.governance_manager.get_site_governance_status(db, site_id)
-
-
-@app.post("/api/governance/approve", response_model=schemas.GovernanceApprovalOut)
-def approve_governance(
-    body: schemas.GovernanceApprovalCreate,
-    db: Session = Depends(get_db),
-    user_payload: Dict[str, Any] = Depends(security.require_role("admin"))
-):
-    security.validate_site_access(user_payload, body.site_id)
-    approval = governance.governance_manager.record_approval(
-        db=db,
-        site_id=body.site_id,
-        capability=body.capability,
-        legal_approval_ref=body.legal_approval_ref,
-        approved_by=user_payload.get("sub", "admin"),
-        restricted_mode=body.restricted_mode
-    )
-    return approval
-
-
-# ---------------------------------------------------------------------------
 # Ledger & Tamper Detection (FR-7)
 # ---------------------------------------------------------------------------
 @app.get("/ledger/verify", response_model=schemas.LedgerVerifyResult)
@@ -2428,438 +2477,7 @@ def verify_ledger(
     db: Session = Depends(get_db),
     user_payload: Dict[str, Any] = Depends(security.require_role("operator", allow_guest_operator=True))
 ):
-    res = ledger.verify_chain(db)
-    
-    # Extend with external blockchain anchor status (FR-BA-5 / PRD Section 10)
-    try:
-        query = db.query(models.LedgerAnchor)
-        target_site = site_id or "site-alpha"
-        query = query.filter(models.LedgerAnchor.site_id == target_site)
-        latest_anchor = query.order_by(models.LedgerAnchor.created_at.desc()).first()
-
-        if latest_anchor:
-            res.blockchain_anchors_available = True
-            res.latest_anchor_id = latest_anchor.id
-            res.latest_anchor_status = latest_anchor.status
-
-            if res.intact and latest_anchor.status == "confirmed":
-                records = (
-                    db.query(models.LedgerRecord)
-                    .filter(
-                        models.LedgerRecord.site_id == latest_anchor.site_id,
-                        models.LedgerRecord.seq >= latest_anchor.from_sequence,
-                        models.LedgerRecord.seq <= latest_anchor.through_sequence,
-                    )
-                    .order_by(models.LedgerRecord.seq.asc())
-                    .all()
-                )
-                if records:
-                    local_root = anchor_service.calculate_range_root(records, latest_anchor.schema_version)
-                    res.latest_anchor_matches = (local_root == latest_anchor.root_hash)
-                else:
-                    res.latest_anchor_matches = False
-            else:
-                res.latest_anchor_matches = False if not res.intact else None
-        else:
-            res.blockchain_anchors_available = False
-    except Exception:
-        # Failure to contact blockchain or query anchors must never make local verification unavailable
-        res.blockchain_anchors_available = False
-
-    return res
-
-
-@app.post("/ledger/anchor", response_model=schemas.LedgerAnchorOut)
-def create_anchor(
-    payload: schemas.LedgerAnchorCreate,
-    db: Session = Depends(get_db),
-    user_payload: Dict[str, Any] = Depends(security.require_role("admin"))
-):
-    site_id = payload.site_id or "site-alpha"
-    security.validate_site_access(user_payload, site_id)
-
-    try:
-        anchor = anchor_service.create_ledger_anchor(
-            db=db,
-            site_id=site_id,
-            from_seq=payload.from_sequence,
-            through_seq=payload.through_sequence,
-            force=payload.force,
-            username=user_payload.get("sub", "admin"),
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception:
-        raise HTTPException(status_code=500, detail="Anchor creation failed")
-
-    write_audit(
-        db,
-        user_payload.get("sub", "admin"),
-        "BLOCKCHAIN_ANCHOR_CREATE",
-        site_id=site_id,
-        detail=f"Anchored range [{anchor.from_sequence}, {anchor.through_sequence}] as {anchor.id} (tx: {anchor.transaction_hash})",
-    )
-    return anchor
-
-
-@app.get("/ledger/anchors", response_model=List[schemas.LedgerAnchorOut])
-def get_anchors(
-    site_id: Optional[str] = Query(default=None),
-    status: Optional[str] = Query(default=None),
-    limit: int = Query(default=50, le=200),
-    db: Session = Depends(get_db),
-    user_payload: Dict[str, Any] = Depends(security.require_role("supervisor"))
-):
-    if site_id:
-        security.validate_site_access(user_payload, site_id)
-
-    q = db.query(models.LedgerAnchor)
-    allowed_sites = user_payload.get("site_ids", ["*"])
-    if "*" not in allowed_sites:
-        q = q.filter(models.LedgerAnchor.site_id.in_(allowed_sites))
-    if site_id:
-        q = q.filter(models.LedgerAnchor.site_id == site_id)
-    if status:
-        q = q.filter(models.LedgerAnchor.status == status)
-
-    return q.order_by(models.LedgerAnchor.created_at.desc()).limit(limit).all()
-
-
-# ---------------------------------------------------------------------------
-# Multisignature Proposal & Threshold Governance APIs (FR-MS-1 to FR-MS-4)
-# Defined before /ledger/anchors/{anchor_id} to avoid FastAPI path collision
-# ---------------------------------------------------------------------------
-def _proposal_to_out(p: models.MerkleAnchor) -> schemas.AnchorProposalOut:
-    valid_sigs = [s for s in p.signatures if s.status == "valid"]
-    sigs_out = [
-        schemas.AnchorSignatureOut(
-            id=s.id,
-            signer_user_id=s.signer_user_id,
-            signer_role=s.signer_role,
-            signature_algorithm=s.signature_algorithm,
-            public_key_id=s.public_key_id,
-            signature=s.signature,
-            payload_digest=s.payload_digest,
-            status=s.status,
-            reason=s.reason,
-            signed_at=s.signed_at,
-        )
-        for s in valid_sigs
-    ]
-    distinct_signers = len({s.signer_user_id for s in valid_sigs})
-    threshold = 2
-    return schemas.AnchorProposalOut(
-        id=p.id,
-        site_id=p.site_id,
-        from_sequence=p.from_sequence,
-        through_sequence=p.through_sequence,
-        merkle_root=p.merkle_root,
-        provenance_root=p.provenance_root,
-        schema_version=p.schema_version,
-        status=p.status,
-        network=p.network,
-        chain_id=p.chain_id,
-        contract_address=p.contract_address,
-        transaction_hash=p.transaction_hash,
-        block_number=p.block_number,
-        created_by=p.created_by,
-        created_at=p.created_at,
-        submitted_at=p.submitted_at,
-        confirmed_at=p.confirmed_at,
-        expires_at=p.expires_at,
-        last_error=p.last_error,
-        signatures=sigs_out,
-        signatures_count=distinct_signers,
-        threshold_required=threshold,
-        threshold_met=(distinct_signers >= threshold),
-        payload_digest=multisig_service.get_proposal_payload_digest(p),
-    )
-
-
-@app.post("/ledger/anchors/proposals", response_model=schemas.AnchorProposalOut)
-def create_proposal_endpoint(
-    req: schemas.AnchorProposalCreate,
-    db: Session = Depends(get_db),
-    user_payload: Dict[str, Any] = Depends(security.require_role("admin"))
-):
-    site_id = req.site_id or "site-alpha"
-    security.validate_site_access(user_payload, site_id)
-
-    try:
-        proposal = multisig_service.create_anchor_proposal(
-            db=db,
-            site_id=site_id,
-            from_seq=req.from_sequence,
-            through_seq=req.through_sequence,
-            created_by=user_payload.get("sub", "admin"),
-            expires_in_hours=req.expires_in_hours or 24,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    write_audit(
-        db,
-        user_payload.get("sub", "admin"),
-        "PROPOSAL_CREATE",
-        site_id=site_id,
-        detail=f"Created proposal {proposal.id} for range [{proposal.from_sequence}, {proposal.through_sequence}]",
-    )
-    return _proposal_to_out(proposal)
-
-
-@app.get("/ledger/anchors/proposals", response_model=List[schemas.AnchorProposalOut])
-def get_proposals_endpoint(
-    site_id: Optional[str] = Query(default=None),
-    status: Optional[str] = Query(default=None),
-    db: Session = Depends(get_db),
-    user_payload: Dict[str, Any] = Depends(security.require_role("supervisor"))
-):
-    if site_id:
-        security.validate_site_access(user_payload, site_id)
-
-    q = db.query(models.MerkleAnchor)
-    allowed_sites = user_payload.get("site_ids", ["*"])
-    if "*" not in allowed_sites:
-        q = q.filter(models.MerkleAnchor.site_id.in_(allowed_sites))
-    if site_id:
-        q = q.filter(models.MerkleAnchor.site_id == site_id)
-    if status:
-        q = q.filter(models.MerkleAnchor.status == status)
-
-    proposals = q.order_by(models.MerkleAnchor.created_at.desc()).all()
-    return [_proposal_to_out(p) for p in proposals]
-
-
-@app.get("/ledger/anchors/proposals/{proposal_id}", response_model=schemas.AnchorProposalOut)
-def get_proposal_endpoint(
-    proposal_id: str,
-    db: Session = Depends(get_db),
-    user_payload: Dict[str, Any] = Depends(security.require_role("supervisor"))
-):
-    proposal = db.query(models.MerkleAnchor).filter(models.MerkleAnchor.id == proposal_id).first()
-    if not proposal:
-        raise HTTPException(status_code=404, detail=f"Proposal {proposal_id} not found")
-
-    security.validate_site_access(user_payload, proposal.site_id)
-    return _proposal_to_out(proposal)
-
-
-@app.post("/ledger/anchors/proposals/{proposal_id}/sign", response_model=schemas.AnchorProposalOut)
-def sign_proposal_endpoint(
-    proposal_id: str,
-    req: schemas.AnchorSignRequest,
-    db: Session = Depends(get_db),
-    user_payload: Dict[str, Any] = Depends(security.require_role("supervisor"))
-):
-    proposal = db.query(models.MerkleAnchor).filter(models.MerkleAnchor.id == proposal_id).first()
-    if not proposal:
-        raise HTTPException(status_code=404, detail=f"Proposal {proposal_id} not found")
-
-    security.validate_site_access(user_payload, proposal.site_id)
-
-    try:
-        updated_proposal, signature = multisig_service.sign_anchor_proposal(
-            db=db,
-            proposal_id=proposal_id,
-            signer_user_id=user_payload.get("sub", "unknown"),
-            signer_role=user_payload.get("role", "supervisor"),
-            reason=req.reason,
-        )
-    except PermissionError as pe:
-        raise HTTPException(status_code=403, detail=str(pe))
-    except ValueError as ve:
-        raise HTTPException(status_code=400, detail=str(ve))
-
-    write_audit(
-        db,
-        user_payload.get("sub", "supervisor"),
-        "PROPOSAL_SIGN",
-        site_id=proposal.site_id,
-        detail=f"Signed proposal {proposal_id}: status={updated_proposal.status}",
-    )
-    return _proposal_to_out(updated_proposal)
-
-
-@app.post("/ledger/anchors/proposals/{proposal_id}/reject", response_model=schemas.AnchorProposalOut)
-def reject_proposal_endpoint(
-    proposal_id: str,
-    req: schemas.AnchorRejectRequest,
-    db: Session = Depends(get_db),
-    user_payload: Dict[str, Any] = Depends(security.require_role("supervisor"))
-):
-    proposal = db.query(models.MerkleAnchor).filter(models.MerkleAnchor.id == proposal_id).first()
-    if not proposal:
-        raise HTTPException(status_code=404, detail=f"Proposal {proposal_id} not found")
-
-    security.validate_site_access(user_payload, proposal.site_id)
-
-    try:
-        rejected = multisig_service.reject_anchor_proposal(
-            db=db,
-            proposal_id=proposal_id,
-            rejecter_user_id=user_payload.get("sub", "unknown"),
-            rejecter_role=user_payload.get("role", "supervisor"),
-            reason=req.reason,
-        )
-    except ValueError as ve:
-        raise HTTPException(status_code=400, detail=str(ve))
-
-    write_audit(
-        db,
-        user_payload.get("sub", "supervisor"),
-        "PROPOSAL_REJECT",
-        site_id=proposal.site_id,
-        detail=f"Rejected proposal {proposal_id}: reason={req.reason}",
-    )
-    return _proposal_to_out(rejected)
-
-
-@app.post("/ledger/anchors/proposals/{proposal_id}/submit", response_model=schemas.AnchorProposalOut)
-def submit_proposal_endpoint(
-    proposal_id: str,
-    db: Session = Depends(get_db),
-    user_payload: Dict[str, Any] = Depends(security.require_role("admin"))
-):
-    proposal = db.query(models.MerkleAnchor).filter(models.MerkleAnchor.id == proposal_id).first()
-    if not proposal:
-        raise HTTPException(status_code=404, detail=f"Proposal {proposal_id} not found")
-
-    security.validate_site_access(user_payload, proposal.site_id)
-
-    try:
-        submitted = multisig_service.submit_anchor_proposal(
-            db=db,
-            proposal_id=proposal_id,
-            admin_user_id=user_payload.get("sub", "admin"),
-        )
-    except ValueError as ve:
-        raise HTTPException(status_code=400, detail=str(ve))
-
-    write_audit(
-        db,
-        user_payload.get("sub", "admin"),
-        "PROPOSAL_SUBMIT",
-        site_id=proposal.site_id,
-        detail=f"Submitted proposal {proposal_id} to blockchain: tx={submitted.transaction_hash}",
-    )
-    return _proposal_to_out(submitted)
-
-
-@app.post("/ledger/anchors/proposals/{proposal_id}/verify")
-def verify_proposal_endpoint(
-    proposal_id: str,
-    db: Session = Depends(get_db),
-    user_payload: Dict[str, Any] = Depends(security.require_role("supervisor"))
-):
-    proposal = db.query(models.MerkleAnchor).filter(models.MerkleAnchor.id == proposal_id).first()
-    if not proposal:
-        raise HTTPException(status_code=404, detail=f"Proposal {proposal_id} not found")
-
-    security.validate_site_access(user_payload, proposal.site_id)
-
-    res = multisig_service.verify_proposal_anchor(db, proposal_id)
-    write_audit(
-        db,
-        user_payload.get("sub", "supervisor"),
-        "PROPOSAL_VERIFY",
-        site_id=proposal.site_id,
-        detail=f"Verified proposal {proposal_id}: valid={res.get('valid')}",
-    )
-    return res
-
-
-@app.get("/ledger/anchors/{anchor_id}", response_model=schemas.LedgerAnchorOut)
-def get_anchor(
-    anchor_id: str,
-    db: Session = Depends(get_db),
-    user_payload: Dict[str, Any] = Depends(security.require_role("supervisor"))
-):
-    anchor = db.query(models.LedgerAnchor).filter(
-        (models.LedgerAnchor.id == anchor_id) | (models.LedgerAnchor.anchor_id == anchor_id)
-    ).first()
-    if not anchor:
-        raise HTTPException(status_code=404, detail=f"Anchor {anchor_id} not found")
-
-    security.validate_site_access(user_payload, anchor.site_id)
-    return anchor
-
-
-@app.post("/ledger/anchors/{anchor_id}/verify", response_model=schemas.LedgerAnchorVerifyResult)
-def verify_anchor(
-    anchor_id: str,
-    db: Session = Depends(get_db),
-    user_payload: Dict[str, Any] = Depends(security.require_role("supervisor"))
-):
-    anchor = db.query(models.LedgerAnchor).filter(
-        (models.LedgerAnchor.id == anchor_id) | (models.LedgerAnchor.anchor_id == anchor_id)
-    ).first()
-    if not anchor:
-        raise HTTPException(status_code=404, detail=f"Anchor {anchor_id} not found")
-
-    security.validate_site_access(user_payload, anchor.site_id)
-
-    result = anchor_service.verify_ledger_anchor(db, anchor.id, username=user_payload.get("sub", "supervisor"))
-
-    write_audit(
-        db,
-        user_payload.get("sub", "supervisor"),
-        "BLOCKCHAIN_ANCHOR_VERIFY",
-        site_id=anchor.site_id,
-        detail=f"Verified anchor {anchor.id}: verified={result.verified}, root_matches={result.root_matches}",
-    )
-    return result
-
-
-@app.post("/ledger/anchors/{anchor_id}/retry", response_model=schemas.LedgerAnchorOut)
-def retry_anchor(
-    anchor_id: str,
-    db: Session = Depends(get_db),
-    user_payload: Dict[str, Any] = Depends(security.require_role("admin"))
-):
-    anchor = db.query(models.LedgerAnchor).filter(
-        (models.LedgerAnchor.id == anchor_id) | (models.LedgerAnchor.anchor_id == anchor_id)
-    ).first()
-    if not anchor:
-        raise HTTPException(status_code=404, detail=f"Anchor {anchor_id} not found")
-
-    security.validate_site_access(user_payload, anchor.site_id)
-
-    provider = blockchain_provider.get_blockchain_provider()
-    anchor.attempt_count += 1
-    anchor.submitted_at = datetime.utcnow()
-
-    try:
-        tx_meta = provider.submit_anchor(
-            anchor_id=anchor.anchor_id,
-            site_id=anchor.site_id,
-            from_seq=anchor.from_sequence,
-            through_seq=anchor.through_sequence,
-            root_hash=anchor.root_hash,
-            schema_version=anchor.schema_version,
-        )
-        anchor.transaction_hash = tx_meta.get("tx_hash")
-        anchor.block_number = tx_meta.get("block_number")
-        anchor.confirmations = tx_meta.get("confirmations", 0)
-        anchor.status = tx_meta.get("status", "submitted")
-        anchor.explorer_url = tx_meta.get("explorer_url")
-        if anchor.status == "confirmed":
-            anchor.confirmed_at = datetime.utcnow()
-        anchor.last_error = None
-    except Exception:
-        anchor.status = "failed"
-        anchor.last_error = "Blockchain submission failed"
-
-    db.commit()
-    db.refresh(anchor)
-
-    write_audit(
-        db,
-        user_payload.get("sub", "admin"),
-        "BLOCKCHAIN_ANCHOR_RETRY",
-        site_id=anchor.site_id,
-        detail=f"Retried anchor {anchor.id}: status={anchor.status}, attempt={anchor.attempt_count}",
-    )
-    return anchor
+    return ledger.verify_chain(db)
 
 
 @app.post("/ledger/tamper-demo/{alert_id}")
@@ -2877,254 +2495,6 @@ def tamper_demo(
     db.commit()
     write_audit(db, user_payload.get("sub"), "TAMPER_DEMO", site_id=alert.site_id, detail=f"Directly edited {alert_id} bypassing ledger")
     return {"status": "tampered", "alert_id": alert_id}
-
-
-# ---------------------------------------------------------------------------
-# Advanced Blockchain Integrity: Merkle Proofs & Provenance (FR-MP)
-# ---------------------------------------------------------------------------
-
-
-@app.post("/ledger/merkle/build", response_model=schemas.MerkleBuildResponse)
-def build_merkle_tree_endpoint(
-    req: schemas.MerkleBuildRequest,
-    db: Session = Depends(get_db),
-    user_payload: Dict[str, Any] = Depends(security.require_role("supervisor"))
-):
-    site_id = req.site_id or "site-alpha"
-    security.validate_site_access(user_payload, site_id)
-
-    records = (
-        db.query(models.LedgerRecord)
-        .filter(
-            models.LedgerRecord.site_id == site_id,
-            models.LedgerRecord.seq >= req.from_sequence,
-            models.LedgerRecord.seq <= req.through_sequence,
-        )
-        .order_by(models.LedgerRecord.seq.asc())
-        .all()
-    )
-    if not records:
-        raise HTTPException(status_code=400, detail="No ledger records in specified sequence range")
-
-    leaf_hashes = []
-    prov_hashes = []
-    for r in records:
-        alert = db.query(models.Alert).filter(models.Alert.id == r.alert_id).first()
-        if alert and not alert.provenance_hash:
-            provenance_service.attach_alert_provenance(alert, db)
-            db.commit()
-
-        leaf_payload = merkle_engine.build_canonical_leaf_payload(
-            site_id=site_id,
-            sequence=r.seq,
-            alert_id=r.alert_id,
-            record_hash=r.record_hash,
-            model_provenance_hash=alert.provenance_hash if alert else None,
-            rule_config_hash=alert.rule_config_hash if alert else None,
-        )
-        leaf_hashes.append(merkle_engine.compute_leaf_hash(leaf_payload))
-        prov_hashes.append(alert.provenance_hash if (alert and alert.provenance_hash) else ("0" * 64))
-
-    root_hash, _ = merkle_engine.build_merkle_tree(leaf_hashes)
-    prov_root = merkle_engine.compute_provenance_root(prov_hashes)
-
-    return schemas.MerkleBuildResponse(
-        root_hash=root_hash,
-        provenance_root_hash=prov_root,
-        leaf_count=len(leaf_hashes),
-        from_sequence=req.from_sequence,
-        through_sequence=req.through_sequence,
-        schema_version="merkle-v1",
-    )
-
-
-@app.get("/ledger/proof/{alert_id}", response_model=schemas.MerkleProofResponse)
-@app.get("/alerts/{alert_id}/merkle-proof", response_model=schemas.MerkleProofResponse)
-def get_alert_merkle_proof(
-    alert_id: str,
-    db: Session = Depends(get_db),
-    user_payload: Dict[str, Any] = Depends(security.require_role("supervisor"))
-):
-    alert = db.query(models.Alert).filter(models.Alert.id == alert_id).first()
-    if not alert:
-        raise HTTPException(status_code=404, detail="Alert not found")
-    security.validate_site_access(user_payload, alert.site_id)
-
-    ledger_rec = db.query(models.LedgerRecord).filter(models.LedgerRecord.alert_id == alert_id).first()
-    if not ledger_rec:
-        raise HTTPException(status_code=400, detail=f"Alert {alert_id} has no linked ledger sequence")
-
-    # Check if there is an active proposal or anchor covering this record
-    anchor = (
-        db.query(models.MerkleAnchor)
-        .filter(
-            models.MerkleAnchor.site_id == alert.site_id,
-            models.MerkleAnchor.from_sequence <= ledger_rec.seq,
-            models.MerkleAnchor.through_sequence >= ledger_rec.seq,
-        )
-        .first()
-    )
-
-    from_seq = anchor.from_sequence if anchor else 0
-    through_seq = anchor.through_sequence if anchor else ledger_rec.seq
-
-    # Query all records in range
-    records = (
-        db.query(models.LedgerRecord)
-        .filter(
-            models.LedgerRecord.site_id == alert.site_id,
-            models.LedgerRecord.seq >= from_seq,
-            models.LedgerRecord.seq <= through_seq,
-        )
-        .order_by(models.LedgerRecord.seq.asc())
-        .all()
-    )
-
-    leaf_hashes = []
-    target_index = -1
-    target_payload = {}
-
-    for idx, r in enumerate(records):
-        rec_alert = db.query(models.Alert).filter(models.Alert.id == r.alert_id).first()
-        if rec_alert and not rec_alert.provenance_hash:
-            provenance_service.attach_alert_provenance(rec_alert, db)
-            db.commit()
-
-        lp = merkle_engine.build_canonical_leaf_payload(
-            site_id=alert.site_id,
-            sequence=r.seq,
-            alert_id=r.alert_id,
-            record_hash=r.record_hash,
-            model_provenance_hash=rec_alert.provenance_hash if rec_alert else None,
-            rule_config_hash=rec_alert.rule_config_hash if rec_alert else None,
-        )
-        lh = merkle_engine.compute_leaf_hash(lp)
-        leaf_hashes.append(lh)
-        if r.seq == ledger_rec.seq:
-            target_index = idx
-            target_payload = lp
-
-    if target_index == -1:
-        raise HTTPException(status_code=500, detail="Target leaf could not be indexed in sequence range")
-
-    root_hash, _ = merkle_engine.build_merkle_tree(leaf_hashes)
-    sibling_hashes, positions = merkle_engine.generate_merkle_proof(leaf_hashes, target_index)
-
-    return schemas.MerkleProofResponse(
-        alert_id=alert.id,
-        sequence=ledger_rec.seq,
-        leaf_hash=leaf_hashes[target_index],
-        leaf_payload=target_payload,
-        sibling_hashes=sibling_hashes,
-        positions=positions,
-        root_hash=root_hash,
-        schema_version="merkle-v1",
-        from_sequence=from_seq,
-        through_sequence=through_seq,
-    )
-
-
-@app.post("/ledger/proof/verify", response_model=schemas.MerkleProofVerifyResponse)
-def verify_merkle_proof_endpoint(
-    req: schemas.MerkleProofVerifyRequest,
-    user_payload: Dict[str, Any] = Depends(security.require_role("supervisor"))
-):
-    valid, calc_root = merkle_engine.verify_merkle_proof(
-        leaf_hash=req.leaf_hash,
-        sibling_hashes=req.sibling_hashes,
-        positions=req.positions,
-        root_hash=req.root_hash,
-    )
-    msg = (
-        "Alert is included in the requested Merkle root."
-        if valid
-        else f"Proof mismatch: computed root ({calc_root}) does not match expected root ({req.root_hash})."
-    )
-    return schemas.MerkleProofVerifyResponse(
-        valid=valid,
-        alert_id=req.alert_id,
-        root_hash=req.root_hash,
-        calculated_root_hash=calc_root,
-        message=msg,
-    )
-
-
-# ---------------------------------------------------------------------------
-# AI Model Provenance APIs (FR-MP-4, FR-MP-5)
-# ---------------------------------------------------------------------------
-@app.get("/models/{model_version}/provenance", response_model=schemas.ModelProvenanceOut)
-def get_model_provenance(
-    model_version: str,
-    db: Session = Depends(get_db),
-    user_payload: Dict[str, Any] = Depends(security.require_role("operator", allow_guest_operator=True))
-):
-    prov = provenance_service.get_or_register_model_provenance(db, model_version)
-    return schemas.ModelProvenanceOut(
-        id=prov.id,
-        model_name=prov.model_name,
-        model_version=prov.model_version,
-        artifact_hash=prov.artifact_hash,
-        runtime_version=prov.runtime_version,
-        rule_version=prov.rule_version,
-        rule_config_hash=prov.rule_config_hash,
-        preprocessing_config_hash=prov.preprocessing_config_hash,
-        provenance_hash=prov.provenance_hash,
-        registered_by=prov.registered_by,
-        created_at=prov.created_at,
-    )
-
-
-@app.get("/alerts/{alert_id}/provenance", response_model=schemas.AlertProvenanceOut)
-def get_alert_provenance(
-    alert_id: str,
-    db: Session = Depends(get_db),
-    user_payload: Dict[str, Any] = Depends(security.require_role("operator", allow_guest_operator=True))
-):
-    alert = db.query(models.Alert).filter(models.Alert.id == alert_id).first()
-    if not alert:
-        raise HTTPException(status_code=404, detail="Alert not found")
-    security.validate_site_access(user_payload, alert.site_id)
-
-    if not alert.provenance_hash:
-        provenance_service.attach_alert_provenance(alert, db)
-        db.commit()
-        db.refresh(alert)
-
-    return schemas.AlertProvenanceOut(
-        alert_id=alert.id,
-        provenance=alert.provenance or "detector",
-        model_name=alert.model_name,
-        model_version=alert.model_version,
-        model_artifact_hash=alert.model_artifact_hash,
-        runtime_version=alert.runtime_version,
-        rule_version=alert.rule_version,
-        rule_config_hash=alert.rule_config_hash,
-        preprocessing_config_hash=alert.preprocessing_config_hash,
-        provenance_hash=alert.provenance_hash,
-        is_valid=True,
-    )
-
-
-@app.post("/alerts/{alert_id}/provenance/verify", response_model=schemas.AlertProvenanceVerifyResponse)
-def verify_alert_provenance_endpoint(
-    alert_id: str,
-    db: Session = Depends(get_db),
-    user_payload: Dict[str, Any] = Depends(security.require_role("supervisor"))
-):
-    alert = db.query(models.Alert).filter(models.Alert.id == alert_id).first()
-    if not alert:
-        raise HTTPException(status_code=404, detail="Alert not found")
-    security.validate_site_access(user_payload, alert.site_id)
-
-    matches, stored_hash, recomputed_hash, message = provenance_service.verify_alert_provenance(alert)
-    return schemas.AlertProvenanceVerifyResponse(
-        alert_id=alert.id,
-        provenance=alert.provenance or "detector",
-        stored_hash=stored_hash,
-        recomputed_hash=recomputed_hash,
-        matches=matches,
-        message=message,
-    )
 
 
 # ---------------------------------------------------------------------------

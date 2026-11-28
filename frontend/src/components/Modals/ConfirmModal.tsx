@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { SpatialOverlay } from '../Spatial/MotionPrimitives';
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -40,59 +41,52 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-modal-title"
-      className="fixed inset-0 z-[250] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+      className="fixed inset-0 z-[250] bg-slate-950/30 backdrop-blur-md flex items-center justify-center p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="bg-surface border border-border-default rounded-2xl w-full max-w-[420px] overflow-hidden shadow-2xl text-txt-primary">
-        {/* Header */}
-        <div className="flex items-center gap-2.5 px-5 py-4 border-b border-border-default bg-surface-subtle">
-          <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm shadow-xs ${
-            isDestructive ? 'bg-[#fff0f1] text-[#c84f58]' : 'bg-[#e6f7f5] text-[#0b8d8b]'
-          }`}>
-            <i className={`ti ${isDestructive ? 'ti-alert-triangle' : 'ti-help-circle'}`}></i>
-          </div>
+      <SpatialOverlay className="ui-dialog spatial-glass-overlay w-full max-w-[420px] overflow-hidden text-txt-primary">
+        <div className="flex items-center gap-2.5 px-5 py-4 border-b border-border-subtle">
+          <i className={`ti ${isDestructive ? 'ti-alert-triangle text-status-danger' : 'ti-help-circle text-primary'} text-lg shrink-0`} aria-hidden="true" />
           <h3 id="confirm-modal-title" className="text-sm font-bold font-display text-txt-primary flex-1 truncate">
             {title}
           </h3>
           <button
             onClick={onCancel}
             aria-label="Close dialog"
-            className="w-7 h-7 rounded-lg text-txt-muted hover:text-txt-primary flex items-center justify-center transition-colors"
+            className="w-7 h-7 rounded-lg text-txt-muted hover:text-txt-primary hover:bg-primary-surface/60 flex items-center justify-center transition-colors"
           >
-            <i className="ti ti-x text-sm"></i>
+            <i className="ti ti-x text-sm" />
           </button>
         </div>
 
-        {/* Body */}
         <div className="p-5">
-          <p className="text-xs text-txt-muted leading-relaxed m-0">
+          <p className="text-xs text-txt-secondary leading-relaxed m-0">
             {message}
           </p>
         </div>
 
-        {/* Actions */}
-        <div className="flex items-center justify-end gap-2.5 px-5 py-3.5 bg-surface-subtle border-t border-border-default">
+        <div className="flex items-center justify-end gap-2.5 px-5 py-3.5 border-t border-border-subtle">
           <button
             onClick={onCancel}
-            className="px-4 py-2 rounded-xl text-xs font-semibold text-txt-muted hover:text-txt-primary bg-surface border border-border-default transition-colors cursor-pointer"
+            className="px-4 py-2 rounded-[10px] text-xs font-semibold text-txt-secondary hover:text-txt-primary bg-surface/70 border border-border-default transition-colors cursor-pointer"
           >
             {cancelLabel}
           </button>
           <button
             ref={confirmBtnRef}
             onClick={onConfirm}
-            className={`px-4 py-2 rounded-xl text-xs font-bold text-white shadow-xs transition-colors cursor-pointer ${
+            className={`px-4 py-2 rounded-[10px] text-xs font-bold text-white shadow-xs transition-colors cursor-pointer ${
               isDestructive
-                ? 'bg-[#c84f58] hover:bg-[#b03e46]'
-                : 'bg-gradient-to-r from-[#087f82] to-[#16a79d] hover:from-[#066e72] hover:to-[#0b968e]'
+                ? 'bg-status-danger hover:bg-red-700'
+                : 'brand-button'
             }`}
           >
             {confirmLabel}
           </button>
         </div>
-      </div>
+      </SpatialOverlay>
     </div>
   );
 };

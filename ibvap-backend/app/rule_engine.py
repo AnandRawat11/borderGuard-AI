@@ -688,13 +688,12 @@ def evaluate_track_against_rules_sync(
             # 3. Append to SHA-256 Ledger
             ledger.append_to_ledger(db, alert)
 
-            # 3b. GIS Terrain Enrichment & Tactical Recommendation (PRD v1 FR-6, FR-7)
+            # 3b. Tactical Recommendation (PRD v1 FR-7)
             try:
-                from . import terrain_service, recommendation_service
-                terrain = terrain_service.enrich_alert_terrain(db, alert)
-                recommendation_service.generate_tactical_recommendation(db, alert, terrain)
+                from . import recommendation_service
+                recommendation_service.generate_tactical_recommendation(db, alert, None)
             except Exception as enrich_ex:
-                logger.warning(f"[ENRICHMENT WARNING] Non-blocking terrain/recommendation error: {enrich_ex}")
+                logger.warning(f"[ENRICHMENT WARNING] Non-blocking recommendation error: {enrich_ex}")
 
             # 4. Dispatch to Real C2 Tactical Network
             if rule.severity == "high":
@@ -1076,10 +1075,9 @@ def evaluate_weapon_threat_sync(
 
     ledger.append_to_ledger(db, alert)
 
-    # Tactical GIS & Recommendation enrichment
+    # Tactical Recommendation enrichment
     try:
-        from . import terrain_service, recommendation_service
-        terrain_service.enrich_alert_terrain(db, alert)
+        from . import recommendation_service
         recommendation_service.generate_alert_recommendation(db, alert)
     except Exception as ex:
         logger.debug("[RuleEngine] Weapon alert enrichment deferred: %s", ex)

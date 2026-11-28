@@ -1,7 +1,10 @@
 import React from 'react';
+import { MotionConfig } from 'motion/react';
 import { useApp } from './context/AppContext';
 import { Sidebar } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
+import { SpatialBackground } from './components/Spatial/SpatialBackground';
+import { SpatialPageShell } from './components/Spatial/MotionPrimitives';
 import { DashboardHome } from './components/Dashboard/DashboardHome';
 import { LiveMonitor } from './components/LiveMonitor/LiveMonitor';
 import { CameraGrid } from './components/CameraGrid/CameraGrid';
@@ -31,7 +34,8 @@ export const App: React.FC = () => {
       dashboard: 'Command Overview',
       monitor: 'Live Sentry Monitor',
       camgrid: 'Camera Matrix Grid',
-      alerts: 'Threats & Forensic Log',
+      alerts: 'Live Alert Feed',
+      vault: 'Forensic Evidence Vault',
       analytics: 'Deep Video Analytics',
       models: 'AI Inference Pipeline',
       'cam-config': 'Sensor Calibration',
@@ -48,54 +52,68 @@ export const App: React.FC = () => {
     document.title = `${titles[currentPage] || 'IBVAP'} | Tactical Defense Platform`;
   }, [currentPage]);
 
+  const isMediaView = currentPage === 'monitor' || currentPage === 'camgrid';
+
   return (
-    <div className="flex h-screen w-screen overflow-hidden relative bg-canvas text-txt-primary font-sans transition-colors duration-150">
-      {/* Main Command Console Shell */}
-      <div className="flex w-full h-full relative z-1">
-        <Sidebar />
+    <MotionConfig reducedMotion="user">
+      <div className="flex h-screen w-screen overflow-hidden relative bg-canvas text-txt-primary font-sans transition-colors duration-200">
+        <SpatialBackground />
 
-        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          <Topbar />
-          <EmergencyAlertBanner />
+        {/* Main Command Console Shell */}
+        <div className="flex w-full h-full relative z-[1]">
+          <Sidebar />
 
-          {/* Core Page Routing */}
-          <main className="flex-1 flex overflow-hidden min-h-0 min-w-0 bg-canvas">
-            {currentPage === 'dashboard' && <DashboardHome />}
-            {currentPage === 'monitor' && <LiveMonitor />}
-            {currentPage === 'camgrid' && <CameraGrid />}
-            {currentPage === 'alerts' && <AlertsLog />}
-            {currentPage === 'analytics' && <Analytics />}
-            {currentPage === 'models' && <AiPipeline />}
-            {currentPage === 'cam-config' && <CameraConfig />}
-            {currentPage === 'watchlist' && <WatchlistPage />}
-            {currentPage === 'features' && <FeatureControlsPage />}
-            {currentPage === 'contact' && <Contact />}
-            {(currentPage === 'privacy' || currentPage === 'terms') && <LegalPage type={currentPage} />}
-            {currentPage === 'not-found' && <NotFound />}
-            {currentPage === 'ai-investigation' && <AIInvestigation />}
-            {currentPage === 'ai-briefing' && <AIBriefing />}
-            {currentPage === 'dashboard-settings' && <DashboardSettings />}
-          </main>
+          <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+            <Topbar />
+            <EmergencyAlertBanner />
+
+            {/* Core Page Routing */}
+            <main className="flex-1 flex overflow-hidden min-h-0 min-w-0 bg-transparent relative">
+              {isMediaView ? (
+                <>
+                  {currentPage === 'monitor' && <LiveMonitor />}
+                  {currentPage === 'camgrid' && <CameraGrid />}
+                </>
+              ) : (
+                <SpatialPageShell key={currentPage} className="flex-1 flex overflow-hidden min-h-0 min-w-0">
+                  {currentPage === 'dashboard' && <DashboardHome />}
+                  {currentPage === 'alerts' && <AlertsLog mode="alerts" />}
+                  {currentPage === 'vault' && <AlertsLog mode="vault" />}
+                  {currentPage === 'analytics' && <Analytics />}
+                  {currentPage === 'models' && <AiPipeline />}
+                  {currentPage === 'cam-config' && <CameraConfig />}
+                  {currentPage === 'watchlist' && <WatchlistPage />}
+                  {currentPage === 'features' && <FeatureControlsPage />}
+                  {currentPage === 'contact' && <Contact />}
+                  {(currentPage === 'privacy' || currentPage === 'terms') && <LegalPage type={currentPage} />}
+                  {currentPage === 'not-found' && <NotFound />}
+                  {currentPage === 'ai-investigation' && <AIInvestigation />}
+                  {currentPage === 'ai-briefing' && <AIBriefing />}
+                  {currentPage === 'dashboard-settings' && <DashboardSettings />}
+                </SpatialPageShell>
+              )}
+            </main>
+          </div>
         </div>
+
+        {/* Mobile Tactical Dispatch Modal */}
+        {activePatrolAlert && (
+          <PatrolModal
+            alert={activePatrolAlert}
+            onClose={closePatrolModal}
+            onAcknowledge={(alertId) => updateAlertState(alertId, 'acknowledged')}
+          />
+        )}
+
+        {/* Forensic Evidence Lightbox Modal */}
+        <EvidenceModal />
+
+        {/* Fullscreen Sentry Video Overlay */}
+        <FullscreenModal />
+
+        {/* Tactical Notice Toast */}
+        {notice && <Toast notice={notice} onDismiss={dismissNotice} />}
       </div>
-
-      {/* Mobile Tactical Dispatch Modal */}
-      {activePatrolAlert && (
-        <PatrolModal
-          alert={activePatrolAlert}
-          onClose={closePatrolModal}
-          onAcknowledge={(alertId) => updateAlertState(alertId, 'acknowledged')}
-        />
-      )}
-
-      {/* Forensic Evidence Lightbox Modal */}
-      <EvidenceModal />
-
-      {/* Fullscreen Sentry Video Overlay */}
-      <FullscreenModal />
-
-      {/* Tactical Notice Toast */}
-      {notice && <Toast notice={notice} onDismiss={dismissNotice} />}
-    </div>
+    </MotionConfig>
   );
 };

@@ -5,9 +5,9 @@ type LegalType = 'privacy' | 'terms';
 export const LegalPage: React.FC<{ type: LegalType }> = ({ type }) => {
   const privacy = type === 'privacy';
   return (
-    <div className="flex-1 overflow-y-auto p-4 md:p-7 lg:p-9 max-w-[1550px] w-full mx-auto space-y-5 bg-canvas text-txt-primary">
-      <article className="max-w-[800px] mx-auto bg-surface border border-border-default rounded-2xl p-6 md:p-8 text-xs text-txt-muted shadow-xs leading-relaxed space-y-4">
-        <div>
+    <div className="flex-1 overflow-y-auto p-4 md:p-7 lg:p-9 max-w-[1550px] w-full mx-auto space-y-5 bg-transparent text-txt-primary">
+      <article className="spatial-glass max-w-[800px] mx-auto p-6 md:p-8 text-xs text-txt-secondary leading-relaxed space-y-4">
+        <div className="pb-3 border-b border-border-subtle">
           <h1 className="text-xl md:text-2xl font-bold font-display text-txt-primary mb-1">
             {privacy ? 'Privacy Protocol & Data Governance' : 'Security Charter & Operational Terms'}
           </h1>
@@ -26,7 +26,7 @@ export const LegalPage: React.FC<{ type: LegalType }> = ({ type }) => {
             </p>
             <h2 className="text-sm font-bold font-display text-txt-primary mb-1 pt-2">Inquiries &amp; Compliance</h2>
             <p>
-              For governance questions regarding forensic data retention and legal holds, contact <a className="text-[#0b8d8b] hover:underline" href="mailto:governance@ibvap.gov.in">governance@ibvap.gov.in</a>.
+              For governance questions regarding forensic data retention and legal holds, contact <a className="text-primary hover:underline" href="mailto:governance@ibvap.gov.in">governance@ibvap.gov.in</a>.
             </p>
           </>
         ) : (

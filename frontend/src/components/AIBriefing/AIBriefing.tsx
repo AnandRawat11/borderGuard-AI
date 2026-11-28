@@ -3,20 +3,20 @@ import { useApp } from '../../context/AppContext';
 import { getSurveillanceBriefing, BriefingResult } from '../../services/agent37';
 
 const THREAT_META: Record<string, { color: string; bg: string; label: string; icon: string }> = {
-  QUIET:    { color: '#22c55e', bg: 'rgba(34,197,94,0.1)',   label: 'All Quiet',     icon: 'ti-shield-check' },
-  ELEVATED: { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', label: 'Elevated',       icon: 'ti-alert-triangle' },
-  HIGH:     { color: '#ef4444', bg: 'rgba(239,68,68,0.1)',   label: 'High Threat',   icon: 'ti-shield-exclamation' },
-  CRITICAL: { color: '#dc2626', bg: 'rgba(220,38,38,0.16)',  label: 'Critical',      icon: 'ti-skull' },
-  UNKNOWN:  { color: '#94a3b8', bg: 'rgba(148,163,184,0.1)', label: 'Unknown',       icon: 'ti-question-mark' },
+  QUIET:    { color: 'var(--green)', bg: 'var(--green-soft)',   label: 'All Quiet',     icon: 'ti-shield-check' },
+  ELEVATED: { color: 'var(--warning-ink)', bg: 'var(--orange-soft)', label: 'Elevated',       icon: 'ti-alert-triangle' },
+  HIGH:     { color: 'var(--red)', bg: 'var(--red-soft)',   label: 'High Threat',   icon: 'ti-shield-exclamation' },
+  CRITICAL: { color: 'var(--red)', bg: 'var(--red-soft)',  label: 'Critical',      icon: 'ti-skull' },
+  UNKNOWN:  { color: 'var(--muted)', bg: 'var(--bg-muted)', label: 'Unknown',       icon: 'ti-question-mark' },
 };
 
 const TYPE_COLORS: Record<string, string> = {
-  intrusion: '#ef4444',
-  watchlist: '#8b5cf6',
-  anpr:      '#3b82f6',
-  loiter:    '#f59e0b',
-  night:     '#06b6d4',
-  weapon:    '#dc2626',
+  intrusion: 'var(--warning-ink)',
+  watchlist: 'var(--primary)',
+  anpr: 'var(--purple)',
+  loiter: 'var(--green)',
+  night: 'var(--blue)',
+  weapon: 'var(--red)',
 };
 
 const WINDOW_OPTIONS = [
@@ -53,28 +53,22 @@ export const AIBriefing: React.FC = () => {
   const meta = b ? (THREAT_META[b.threat_overview] || THREAT_META.UNKNOWN) : null;
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-canvas">
-      {/* Header */}
-      <div className="border-b border-border-default px-6 py-4 shrink-0 bg-surface">
-        <div className="flex items-center gap-3">
-          <span className="w-9 h-9 rounded-xl bg-sky-500/15 flex items-center justify-center">
-            <i className="ti ti-file-report text-sky-400 text-lg" />
-          </span>
-          <div>
-            <h1 className="text-[15px] font-bold text-txt-primary tracking-tight">AI Surveillance Briefing</h1>
-            <p className="text-[11px] text-txt-muted">Powered by Agent37 · Aggregated intelligence summary for a selected time window</p>
-          </div>
-          <div className="ml-auto flex items-center gap-2 text-[10px] font-bold text-sky-400 bg-sky-400/10 px-3 py-1.5 rounded-full">
-            <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />
+    <div className="flex-1 flex flex-col overflow-hidden bg-transparent">
+      {/* Frosted Header */}
+      <div className="spatial-glass-nav border-b border-border-default px-6 py-4 shrink-0">
+        <div className="flex items-center gap-2.5 max-w-[1200px] mx-auto">
+          <i className="ti ti-file-report text-primary text-lg" aria-hidden="true" />
+          <h1 className="text-[15px] font-bold font-display text-txt-primary tracking-tight">AI Surveillance Briefing</h1>
+          <div className="ml-auto flex items-center gap-2 text-[10px] font-bold text-primary bg-primary-surface/85 border border-primary-border/70 px-3 py-1 rounded-full">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
             AGENT37
           </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-5">
-        {/* Control Panel */}
-        <div className="bg-surface border border-border-default rounded-2xl p-5 space-y-4">
-          <div className="text-[11px] font-extrabold uppercase tracking-widest text-txt-muted">
+      <div className="flex-1 overflow-y-auto p-6 space-y-5 max-w-[1200px] w-full mx-auto">
+        <div className="spatial-glass p-5 space-y-4">
+          <div className="text-[11px] font-bold uppercase tracking-widest text-txt-muted">
             Time Window
           </div>
           <div className="flex flex-wrap gap-2">
@@ -82,10 +76,10 @@ export const AIBriefing: React.FC = () => {
               <button
                 key={opt.hours}
                 onClick={() => setHoursBack(opt.hours)}
-                className={`px-3.5 py-1.5 rounded-xl text-[12px] font-bold transition-all ${
+                className={`px-3.5 py-1.5 rounded-[10px] text-[12px] font-bold transition-all ${
                   hoursBack === opt.hours
-                    ? 'bg-sky-500 text-white shadow-md shadow-sky-500/20'
-                    : 'bg-canvas border border-border-default text-txt-secondary hover:border-sky-400/50 hover:text-sky-400'
+                    ? 'brand-button'
+                    : 'bg-surface/75 border border-border-default text-txt-secondary hover:border-primary-border hover:text-primary'
                 }`}
               >
                 {opt.label}
@@ -96,10 +90,10 @@ export const AIBriefing: React.FC = () => {
             id="briefing-generate-btn"
             onClick={fetchBriefing}
             disabled={loading}
-            className={`w-full flex items-center justify-center gap-2.5 py-3 rounded-xl font-bold text-[13px] transition-all ${
+            className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-[10px] font-bold text-[13px] transition-all ${
               loading
-                ? 'bg-sky-500/20 text-sky-300/50 cursor-not-allowed'
-                : 'bg-sky-600 hover:bg-sky-500 text-white shadow-lg shadow-sky-500/20 hover:shadow-sky-500/30 hover:-translate-y-0.5'
+                ? 'ui-disabled'
+                : 'brand-button hover:-translate-y-0.5'
             }`}
           >
             {loading ? (
@@ -115,33 +109,26 @@ export const AIBriefing: React.FC = () => {
             )}
           </button>
           {error && (
-            <div className="flex items-start gap-2.5 bg-red-500/10 border border-red-500/25 rounded-xl p-3.5 text-[12px] text-red-400">
+            <div className="flex items-start gap-2.5 bg-status-danger-surface border border-status-danger-border rounded-[10px] p-3.5 text-[12px] text-status-danger">
               <i className="ti ti-alert-circle mt-0.5 shrink-0" />
               <span>{error}</span>
             </div>
           )}
         </div>
 
-        {/* Results */}
         {result && b && meta && (
-          <div className="space-y-4 animate-[fadeIn_0.4s_ease]">
-            {/* Threat Banner */}
+          <div className="space-y-4">
             <div
-              className="rounded-2xl p-5 border"
-              style={{ background: meta.bg, borderColor: `${meta.color}30` }}
+              className="spatial-glass p-5"
+              style={{ borderColor: `color-mix(in srgb, ${meta.color} 32%, transparent)` }}
             >
               <div className="flex items-center gap-4">
-                <div
-                  className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl shrink-0"
-                  style={{ background: `${meta.color}20`, color: meta.color }}
-                >
-                  <i className={`ti ${meta.icon}`} />
-                </div>
+                <i className={`ti ${meta.icon} text-2xl shrink-0`} style={{ color: meta.color }} aria-hidden="true" />
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1.5">
+                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                     <span
-                      className="text-[10px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-full text-white"
-                      style={{ background: meta.color }}
+                      className="text-[10px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-full"
+                      style={{ background: meta.bg, color: meta.color }}
                     >
                       {meta.label}
                     </span>
@@ -149,7 +136,7 @@ export const AIBriefing: React.FC = () => {
                       {b.period} · {result.alert_count} alerts analysed
                     </span>
                     <span className="ml-auto text-[11px] text-txt-muted">
-                      Confidence: <strong className="text-txt-primary">{b.confidence}%</strong>
+                      Confidence: <strong className="text-txt-primary font-mono">{b.confidence}%</strong>
                     </span>
                   </div>
                   <p className="text-[13px] text-txt-primary leading-snug">{b.executive_summary}</p>
@@ -157,25 +144,24 @@ export const AIBriefing: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Alert Breakdown */}
-              <div className="bg-surface border border-border-default rounded-2xl p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <i className="ti ti-chart-bar text-sky-400" />
-                  <span className="text-[12px] font-extrabold uppercase tracking-widest text-txt-muted">Alert Breakdown</span>
+            <div className="spatial-glass grid grid-cols-1 md:grid-cols-2 divide-y md:divide-x divide-border-subtle overflow-hidden">
+              <div className="p-5">
+                <div className="flex items-center gap-2 mb-3.5 pb-2 border-b border-border-subtle">
+                  <i className="ti ti-chart-bar text-primary" />
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-txt-muted">Alert Breakdown</span>
                 </div>
                 <div className="space-y-2.5">
                   {Object.entries(b.alert_breakdown).map(([type, count]) => {
-                    const color = TYPE_COLORS[type] || '#94a3b8';
+                    const color = TYPE_COLORS[type] || 'var(--muted)';
                     const total = Object.values(b.alert_breakdown).reduce((a, b) => a + b, 0) || 1;
                     const pct = Math.round((count / total) * 100);
                     return (
                       <div key={type}>
                         <div className="flex justify-between text-[11px] mb-1">
                           <span className="font-semibold text-txt-primary capitalize">{type}</span>
-                          <span className="text-txt-muted">{count} ({pct}%)</span>
+                          <span className="text-txt-muted font-mono tabular-nums">{count} ({pct}%)</span>
                         </div>
-                        <div className="h-2 bg-canvas rounded-full overflow-hidden">
+                        <div className="h-1.5 bg-surface/80 rounded-full overflow-hidden">
                           <div
                             className="h-full rounded-full transition-all duration-700"
                             style={{ width: `${pct}%`, background: color }}
@@ -187,11 +173,10 @@ export const AIBriefing: React.FC = () => {
                 </div>
               </div>
 
-              {/* Hotspot Cameras */}
-              <div className="bg-surface border border-border-default rounded-2xl p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <i className="ti ti-camera text-orange-400" />
-                  <span className="text-[12px] font-extrabold uppercase tracking-widest text-txt-muted">Hotspot Cameras</span>
+              <div className="p-5">
+                <div className="flex items-center gap-2 mb-3.5 pb-2 border-b border-border-subtle">
+                  <i className="ti ti-camera text-status-warning" />
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-txt-muted">Hotspot Cameras</span>
                 </div>
                 {b.hotspot_cameras.length === 0 ? (
                   <p className="text-[12px] text-txt-muted italic">No hotspots identified.</p>
@@ -199,8 +184,8 @@ export const AIBriefing: React.FC = () => {
                   <ul className="space-y-2">
                     {b.hotspot_cameras.map((cam, i) => (
                       <li key={i} className="flex items-center gap-2.5 text-[12px] text-txt-primary">
-                        <span className="w-5 h-5 rounded-md bg-orange-500/15 text-orange-400 font-bold text-[10px] flex items-center justify-center shrink-0">
-                          {i + 1}
+                        <span className="font-mono text-status-warning font-bold text-[11px] shrink-0">
+                          #{i + 1}
                         </span>
                         {cam}
                       </li>
@@ -209,11 +194,10 @@ export const AIBriefing: React.FC = () => {
                 )}
               </div>
 
-              {/* Patterns Observed */}
-              <div className="bg-surface border border-border-default rounded-2xl p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <i className="ti ti-network text-purple-400" />
-                  <span className="text-[12px] font-extrabold uppercase tracking-widest text-txt-muted">Patterns Observed</span>
+              <div className="p-5">
+                <div className="flex items-center gap-2 mb-3.5 pb-2 border-b border-border-subtle">
+                  <i className="ti ti-network text-accent" />
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-txt-muted">Patterns Observed</span>
                 </div>
                 {b.patterns_observed.length === 0 ? (
                   <p className="text-[12px] text-txt-muted italic">No significant patterns detected.</p>
@@ -221,7 +205,7 @@ export const AIBriefing: React.FC = () => {
                   <ul className="space-y-2.5">
                     {b.patterns_observed.map((p, i) => (
                       <li key={i} className="flex items-start gap-2.5 text-[12px] text-txt-primary">
-                        <i className="ti ti-point-filled text-purple-400 mt-0.5 shrink-0 text-[8px]" />
+                        <i className="ti ti-point-filled text-accent mt-0.5 shrink-0 text-[8px]" />
                         {p}
                       </li>
                     ))}
@@ -229,11 +213,10 @@ export const AIBriefing: React.FC = () => {
                 )}
               </div>
 
-              {/* Recommended Priorities */}
-              <div className="bg-surface border border-border-default rounded-2xl p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <i className="ti ti-list-check text-emerald-400" />
-                  <span className="text-[12px] font-extrabold uppercase tracking-widest text-txt-muted">Recommended Priorities</span>
+              <div className="p-5">
+                <div className="flex items-center gap-2 mb-3.5 pb-2 border-b border-border-subtle">
+                  <i className="ti ti-list-check text-status-success" />
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-txt-muted">Recommended Priorities</span>
                 </div>
                 {b.recommended_priorities.length === 0 ? (
                   <p className="text-[12px] text-txt-muted italic">No priorities to report.</p>
@@ -241,8 +224,8 @@ export const AIBriefing: React.FC = () => {
                   <ol className="space-y-2.5">
                     {b.recommended_priorities.map((p, i) => (
                       <li key={i} className="flex items-start gap-2.5 text-[12px] text-txt-primary">
-                        <span className="w-5 h-5 rounded-md bg-emerald-500/15 text-emerald-400 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
-                          {i + 1}
+                        <span className="font-mono text-status-success font-bold text-[11px] shrink-0">
+                          {String(i + 1).padStart(2, '0')}.
                         </span>
                         {p}
                       </li>
@@ -252,29 +235,24 @@ export const AIBriefing: React.FC = () => {
               </div>
             </div>
 
-            {/* Key Incidents */}
             {b.key_incidents.length > 0 && (
-              <div className="bg-surface border border-border-default rounded-2xl p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <i className="ti ti-flag text-red-400" />
-                  <span className="text-[12px] font-extrabold uppercase tracking-widest text-txt-muted">Key Incidents</span>
+              <div className="spatial-glass overflow-hidden">
+                <div className="flex items-center gap-2 px-5 py-3.5 border-b border-border-subtle">
+                  <i className="ti ti-flag text-status-danger" />
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-txt-muted">Key Incidents</span>
                 </div>
-                <div className="space-y-3">
+                <div className="divide-y divide-border-subtle bg-surface/45">
                   {b.key_incidents.map((inc, i) => (
-                    <div key={i} className="flex items-start gap-3 p-3 bg-canvas rounded-xl border border-border-default/60">
-                      <span
-                        className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-extrabold shrink-0 mt-0.5"
-                        style={{
-                          background: `${TYPE_COLORS[inc.type] || '#94a3b8'}20`,
-                          color: TYPE_COLORS[inc.type] || '#94a3b8',
-                        }}
-                      >
-                        <i className="ti ti-bell" />
-                      </span>
+                    <div key={i} className="flex items-start gap-3 px-5 py-3.5">
+                      <i
+                        className="ti ti-bell text-sm shrink-0 mt-0.5"
+                        style={{ color: TYPE_COLORS[inc.type] || 'var(--muted)' }}
+                        aria-hidden="true"
+                      />
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
                           <span className="text-[11px] font-bold text-txt-primary capitalize">{inc.type}</span>
-                          <span className="text-[10px] text-txt-muted">· {inc.camera} · {inc.id?.slice(0, 10)}…</span>
+                          <span className="text-[10px] text-txt-muted font-mono">· {inc.camera} · {inc.id?.slice(0, 10)}…</span>
                         </div>
                         <p className="text-[12px] text-txt-secondary">{inc.significance}</p>
                       </div>
@@ -291,16 +269,10 @@ export const AIBriefing: React.FC = () => {
           </div>
         )}
 
-        {/* Empty state */}
         {!result && !loading && (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-sky-500/10 flex items-center justify-center mb-4">
-              <i className="ti ti-file-report text-sky-400 text-3xl" />
-            </div>
-            <div className="text-[14px] font-bold text-txt-primary mb-1">No Briefing Generated</div>
-            <div className="text-[12px] text-txt-muted max-w-xs">
-              Select a time window and click <strong>Generate Briefing</strong> to get an Agent37 AI-powered surveillance intelligence report.
-            </div>
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <i className="ti ti-file-report text-primary text-2xl mb-2 opacity-80" aria-hidden="true" />
+            <div className="text-[14px] font-bold text-txt-primary">No Briefing Generated</div>
           </div>
         )}
       </div>

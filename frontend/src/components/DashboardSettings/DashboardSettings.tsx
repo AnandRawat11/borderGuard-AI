@@ -130,23 +130,22 @@ export const DashboardSettings: React.FC = () => {
 
   if (!isAdmin) {
     return (
-      <div className="flex-1 flex flex-col overflow-hidden bg-canvas">
-        <div className="border-b border-border-default px-6 py-4 shrink-0 bg-surface">
-          <div className="flex items-center gap-3">
-            <span className="w-9 h-9 rounded-xl bg-blue-500/15 flex items-center justify-center">
-              <i className="ti ti-settings text-blue-400 text-lg" />
-            </span>
-            <div>
-              <h1 className="text-[15px] font-bold text-txt-primary">Dashboard Settings</h1>
-              <p className="text-[11px] text-txt-muted">Administrator access required</p>
+      <div className="flex-1 flex flex-col overflow-hidden bg-transparent">
+        <div className="spatial-glass-nav border-b border-border-default px-6 py-4 shrink-0">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2.5">
+              <i className="ti ti-settings text-primary text-lg" aria-hidden="true" />
+              <h1 className="text-[15px] font-bold font-display text-txt-primary">Dashboard Settings</h1>
             </div>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border-default bg-surface/70 text-[11px] font-semibold text-txt-muted">
+              <i className="ti ti-lock text-xs" />
+              Administrator access required
+            </span>
           </div>
         </div>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="w-14 h-14 rounded-2xl bg-red-500/10 flex items-center justify-center mx-auto mb-3">
-              <i className="ti ti-lock text-red-400 text-2xl" />
-            </div>
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="spatial-glass px-8 py-7 text-center max-w-sm">
+            <i className="ti ti-lock text-status-danger text-2xl block mx-auto mb-2.5" aria-hidden="true" />
             <div className="text-[14px] font-bold text-txt-primary mb-1">Access Restricted</div>
             <div className="text-[12px] text-txt-muted">Administrator role required to manage settings.</div>
           </div>
@@ -156,37 +155,23 @@ export const DashboardSettings: React.FC = () => {
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-canvas">
+    <div className="flex-1 flex flex-col overflow-hidden bg-transparent">
       {/* Header */}
-      <div className="border-b border-border-default px-6 py-4 shrink-0 bg-surface">
-        <div className="flex items-center gap-3">
-          <span className="w-9 h-9 rounded-xl bg-blue-500/15 flex items-center justify-center">
-            <i className="ti ti-settings text-blue-400 text-lg" />
-          </span>
-          <div>
-            <h1 className="text-[15px] font-bold text-txt-primary tracking-tight">Dashboard Settings</h1>
-            <p className="text-[11px] text-txt-muted">Administrator configuration · Agent37 & Gemini AI integration</p>
-          </div>
-          <span className="ml-auto text-[10px] font-bold text-blue-400 bg-blue-400/10 px-3 py-1.5 rounded-full">
+      <div className="spatial-glass-nav border-b border-border-default px-6 py-4 shrink-0">
+        <div className="flex items-center gap-2.5">
+          <i className="ti ti-settings text-primary text-lg" aria-hidden="true" />
+          <h1 className="text-[15px] font-bold font-display text-txt-primary tracking-tight">Dashboard Settings</h1>
+          <span className="ml-auto text-[10px] font-bold text-primary bg-primary-surface px-3 py-1 rounded-full border border-primary-border/70">
             ADMIN ONLY
           </span>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
-
-        {/* Agent37 API Key Card */}
-        <div className="bg-surface border border-border-default rounded-2xl overflow-hidden shadow-sm">
-          {/* Card Header */}
-          <div className="px-5 py-4 border-b border-border-default/60 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-violet-500/15 flex items-center justify-center">
-              <i className="ti ti-brain text-violet-400" />
-            </div>
-            <div>
-              <div className="text-[13px] font-bold text-txt-primary">AI Intelligence Configuration</div>
-              <div className="text-[11px] text-txt-muted">Support for Agent37 Cloud (agent37.com) and Google Gemini (AI Studio)</div>
-            </div>
-            {/* Status badge */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-5 max-w-[1100px] w-full mx-auto">
+        <div className="spatial-glass overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-border-subtle flex items-center gap-2.5">
+            <i className="ti ti-brain text-primary text-base" aria-hidden="true" />
+            <div className="text-[13px] font-bold font-display text-txt-primary">AI Intelligence Configuration</div>
             <div className="ml-auto">
               {loadingStatus ? (
                 <span className="text-[11px] text-txt-muted flex items-center gap-1.5">
@@ -194,7 +179,7 @@ export const DashboardSettings: React.FC = () => {
                   Checking…
                 </span>
               ) : keyStatus?.configured ? (
-                <span className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-full">
+                <span className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-status-success-surface px-2.5 py-1 rounded-full">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                   CONFIGURED
                   {keyStatus.provider && (
@@ -204,7 +189,7 @@ export const DashboardSettings: React.FC = () => {
                   )}
                 </span>
               ) : (
-                <span className="flex items-center gap-1.5 text-[11px] font-bold text-amber-500 bg-amber-500/10 px-2.5 py-1 rounded-full">
+                <span className="flex items-center gap-1.5 text-[11px] font-bold text-status-warning bg-status-warning-surface px-2.5 py-1 rounded-full">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                   NOT SET
                 </span>
@@ -212,52 +197,40 @@ export const DashboardSettings: React.FC = () => {
             </div>
           </div>
 
-          <div className="p-5 space-y-5">
-            {/* Quick Provider Selection / Links */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {/* Agent37 */}
+          <div className="p-5 space-y-5 bg-surface/45">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               <a
                 href="https://www.agent37.com/dashboard/cloud/api-keys"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group p-3 bg-canvas border border-border-default/80 hover:border-emerald-500/40 rounded-xl transition-all"
+                className="group p-3 bg-surface/75 border border-border-default hover:border-emerald-500/50 rounded-[10px] transition-all"
               >
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="w-6 h-6 rounded-md bg-emerald-500/15 flex items-center justify-center text-emerald-400">
-                    <i className="ti ti-sparkles text-xs" />
-                  </span>
-                  <span className="text-[12px] font-bold text-txt-primary group-hover:text-emerald-400 transition-colors">
+                <div className="flex items-center gap-2">
+                  <i className="ti ti-sparkles text-sm text-emerald-500" aria-hidden="true" />
+                  <span className="text-[12px] font-bold text-txt-primary group-hover:text-emerald-600 transition-colors">
                     Agent37 Cloud
                   </span>
-                  <i className="ti ti-arrow-up-right text-[11px] text-txt-muted ml-auto group-hover:text-emerald-400" />
+                  <code className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono ml-auto">sk_live_...</code>
+                  <i className="ti ti-arrow-up-right text-[11px] text-txt-muted group-hover:text-emerald-500" />
                 </div>
-                <p className="text-[10px] text-txt-muted leading-tight">
-                  Keys starting with <code className="text-emerald-400/90 font-mono">sk_live_...</code>
-                </p>
               </a>
 
-              {/* Gemini */}
               <a
                 href="https://aistudio.google.com/apikey"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group p-3 bg-canvas border border-border-default/80 hover:border-blue-500/40 rounded-xl transition-all"
+                className="group p-3 bg-surface/75 border border-border-default hover:border-primary-border rounded-[10px] transition-all"
               >
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="w-6 h-6 rounded-md bg-blue-500/15 flex items-center justify-center text-blue-400">
-                    <i className="ti ti-brand-google text-xs" />
-                  </span>
-                  <span className="text-[12px] font-bold text-txt-primary group-hover:text-blue-400 transition-colors">
+                <div className="flex items-center gap-2">
+                  <i className="ti ti-brand-google text-sm text-blue-500" aria-hidden="true" />
+                  <span className="text-[12px] font-bold text-txt-primary group-hover:text-primary transition-colors">
                     Google Gemini
                   </span>
-                  <i className="ti ti-arrow-up-right text-[11px] text-txt-muted ml-auto group-hover:text-blue-400" />
+                  <code className="text-[10px] text-blue-600 dark:text-blue-400 font-mono ml-auto">AIzaSy...</code>
+                  <i className="ti ti-arrow-up-right text-[11px] text-txt-muted group-hover:text-primary" />
                 </div>
-                <p className="text-[10px] text-txt-muted leading-tight">
-                  Keys starting with <code className="text-blue-400/90 font-mono">AIzaSy...</code>
-                </p>
               </a>
 
-              {/* Local Demo */}
               <button
                 type="button"
                 onClick={() => {
@@ -265,34 +238,29 @@ export const DashboardSettings: React.FC = () => {
                   setSaveError(null);
                   setSaveSuccess(false);
                 }}
-                className="text-left group p-3 bg-canvas border border-border-default/80 hover:border-purple-500/40 rounded-xl transition-all"
+                className="text-left group p-3 bg-surface/75 border border-border-default hover:border-primary-border rounded-[10px] transition-all"
               >
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="w-6 h-6 rounded-md bg-purple-500/15 flex items-center justify-center text-purple-400">
-                    <i className="ti ti-bolt text-xs" />
-                  </span>
-                  <span className="text-[12px] font-bold text-txt-primary group-hover:text-purple-400 transition-colors">
+                <div className="flex items-center gap-2">
+                  <i className="ti ti-bolt text-sm text-primary" aria-hidden="true" />
+                  <span className="text-[12px] font-bold text-txt-primary group-hover:text-primary transition-colors">
                     Offline Demo Key
                   </span>
-                  <span className="ml-auto text-[9px] font-bold text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded">
+                  <span className="ml-auto text-[9px] font-bold text-primary bg-primary-surface px-1.5 py-0.5 rounded">
                     FILL
                   </span>
                 </div>
-                <p className="text-[10px] text-txt-muted leading-tight">
-                  Instant offline simulated tactical reports
-                </p>
               </button>
             </div>
 
             {/* Current key display */}
             {keyStatus?.configured && (
-              <div className="flex items-center gap-3 p-3.5 bg-canvas rounded-xl border border-border-default/70">
-                <i className="ti ti-key text-txt-muted" />
+              <div className="flex items-center gap-3 p-3.5 bg-surface/75 rounded-[10px] border border-border-subtle">
+                <i className="ti ti-key text-primary" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="text-[11px] text-txt-muted">Active Key</span>
                     {keyStatus.provider && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-violet-500/10 text-violet-400 uppercase">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-primary-surface text-primary uppercase">
                         {keyStatus.provider}
                       </span>
                     )}
@@ -343,7 +311,7 @@ export const DashboardSettings: React.FC = () => {
                   value={apiKey}
                   onChange={e => { setApiKey(e.target.value); setSaveError(null); setSaveSuccess(false); }}
                   placeholder="Paste sk_live_... (Agent37) or AIzaSy... (Gemini)"
-                  className="w-full bg-canvas border border-border-default rounded-xl px-4 py-2.5 pr-10 text-[13px] text-txt-primary placeholder:text-txt-muted focus:outline-none focus:ring-2 focus:ring-violet-500/40 transition font-mono"
+                  className="w-full bg-surface/85 border border-border-default rounded-[10px] px-4 py-2.5 pr-10 text-[13px] text-txt-primary placeholder:text-txt-muted focus:outline-none focus:ring-2 focus:ring-primary-border transition font-mono"
                   id="settings-agent37-key-input"
                   onKeyDown={e => { if (e.key === 'Enter') handleSave(); }}
                 />
@@ -356,28 +324,6 @@ export const DashboardSettings: React.FC = () => {
                   <i className={`ti ${showKey ? 'ti-eye-off' : 'ti-eye'} text-sm`} />
                 </button>
               </div>
-
-              <p className="text-[11px] text-txt-muted">
-                Paste your key from{' '}
-                <a
-                  href="https://www.agent37.com/dashboard/cloud/api-keys"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-emerald-400 hover:underline font-medium"
-                >
-                  agent37.com
-                </a>{' '}
-                or{' '}
-                <a
-                  href="https://aistudio.google.com/apikey"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-400 hover:underline font-medium"
-                >
-                  Google AI Studio
-                </a>
-                . The key is validated in real-time and stored with AES-256-GCM encryption.
-              </p>
             </div>
 
             {/* Advanced Settings Toggle */}
@@ -392,7 +338,7 @@ export const DashboardSettings: React.FC = () => {
               </button>
 
               {showAdvanced && (
-                <div className="mt-3 p-3.5 bg-canvas rounded-xl border border-border-default/60 space-y-3">
+                <div className="mt-3 p-3.5 bg-surface/65 rounded-[10px] border border-border-subtle space-y-3">
                   <div>
                     <label className="text-[11px] font-medium text-txt-secondary block mb-1">
                       Custom Base URL / Instance URL
@@ -402,11 +348,8 @@ export const DashboardSettings: React.FC = () => {
                       value={baseUrl}
                       onChange={e => setBaseUrl(e.target.value)}
                       placeholder="e.g. https://api.agent37.com or https://instance.agent37.app/v1"
-                      className="w-full bg-surface border border-border-default rounded-lg px-3 py-1.5 text-[12px] text-txt-primary placeholder:text-txt-muted font-mono focus:outline-none focus:ring-1 focus:ring-violet-500"
+                      className="w-full bg-surface/90 border border-border-default rounded-[10px] px-3 py-1.5 text-[12px] text-txt-primary placeholder:text-txt-muted font-mono focus:outline-none focus:ring-1 focus:ring-primary-border"
                     />
-                    <p className="text-[10px] text-txt-muted mt-1">
-                      Leave blank to use the provider's default cloud API.
-                    </p>
                   </div>
                   <div>
                     <label className="text-[11px] font-medium text-txt-secondary block mb-1">
@@ -417,11 +360,8 @@ export const DashboardSettings: React.FC = () => {
                       value={modelName}
                       onChange={e => setModelName(e.target.value)}
                       placeholder="e.g. gemini-1.5-flash, gemini-2.0-flash, or agent37-tactical"
-                      className="w-full bg-surface border border-border-default rounded-lg px-3 py-1.5 text-[12px] text-txt-primary placeholder:text-txt-muted font-mono focus:outline-none focus:ring-1 focus:ring-violet-500"
+                      className="w-full bg-surface/90 border border-border-default rounded-[10px] px-3 py-1.5 text-[12px] text-txt-primary placeholder:text-txt-muted font-mono focus:outline-none focus:ring-1 focus:ring-primary-border"
                     />
-                    <p className="text-[10px] text-txt-muted mt-1">
-                      Leave blank to auto-negotiate the optimal supported model.
-                    </p>
                   </div>
                 </div>
               )}
@@ -448,8 +388,8 @@ export const DashboardSettings: React.FC = () => {
               disabled={saving || !apiKey.trim()}
               className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-[13px] transition-all ${
                 saving || !apiKey.trim()
-                  ? 'bg-violet-500/20 text-violet-300/50 cursor-not-allowed'
-                  : 'bg-violet-600 hover:bg-violet-500 text-white shadow-lg shadow-violet-500/20 hover:-translate-y-0.5'
+                  ? 'ui-disabled'
+                  : 'brand-button hover:-translate-y-0.5'
               }`}
             >
               {saving ? (
@@ -467,33 +407,9 @@ export const DashboardSettings: React.FC = () => {
           </div>
         </div>
 
-        {/* Info Card */}
-        <div className="bg-surface border border-border-default rounded-2xl p-5 space-y-4">
-          <div className="flex items-center gap-2 mb-1">
-            <i className="ti ti-info-circle text-blue-400" />
-            <span className="text-[12px] font-extrabold uppercase tracking-widest text-txt-muted">About Agent37 AI Features</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {[
-              { icon: 'ti-brain', color: '#8b5cf6', title: 'Incident Investigation', desc: 'Analyse individual alerts with correlated evidence, threat assessment, and tactical recommendations.' },
-              { icon: 'ti-file-report', color: '#0ea5e9', title: 'Surveillance Briefing', desc: 'Generate aggregated intelligence reports covering patrol windows from 1 hour to 7 days.' },
-              { icon: 'ti-shield-lock', color: '#22c55e', title: 'Encrypted Storage', desc: 'API keys are encrypted with AES-256-GCM at rest. The raw key is never returned by the API.' },
-              { icon: 'ti-user-check', color: '#f59e0b', title: 'Supervisor Review', desc: 'All AI outputs are advisory. Human supervisor review is required before operational use.' },
-            ].map(item => (
-              <div key={item.title} className="flex gap-3 p-3 bg-canvas rounded-xl border border-border-default/60">
-                <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                  style={{ background: `${item.color}20`, color: item.color }}
-                >
-                  <i className={`ti ${item.icon} text-sm`} />
-                </div>
-                <div>
-                  <div className="text-[12px] font-bold text-txt-primary mb-0.5">{item.title}</div>
-                  <div className="text-[11px] text-txt-muted leading-snug">{item.desc}</div>
-                </div>
-              </div>
-            ))}
-          </div>
+        <div className="flex items-center gap-2 text-[11px] text-txt-muted px-1">
+          <i className="ti ti-shield-lock text-emerald-500 shrink-0" aria-hidden="true" />
+          <span>Keys encrypted at rest (AES-256-GCM). AI outputs are advisory; supervisor review required.</span>
         </div>
       </div>
     </div>

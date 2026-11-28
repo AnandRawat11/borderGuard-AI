@@ -2,7 +2,7 @@ export type AlertType = 'intrusion' | 'watchlist' | 'anpr' | 'loiter' | 'night' 
 export type AlertSeverity = 'high' | 'med' | 'low';
 export type AlertState = 'open' | 'acknowledged' | 'resolved' | 'false_positive' | 'escalated';
 export type AlertProvenance = 'detector' | 'simulation';
-export type PageId = 'dashboard' | 'monitor' | 'camgrid' | 'alerts' | 'analytics' | 'models' | 'cam-config' | 'fence-config' | 'watchlist' | 'features' | 'contact' | 'privacy' | 'terms' | 'not-found' | 'ai-investigation' | 'ai-briefing' | 'dashboard-settings';
+export type PageId = 'dashboard' | 'monitor' | 'camgrid' | 'alerts' | 'vault' | 'analytics' | 'models' | 'cam-config' | 'fence-config' | 'watchlist' | 'features' | 'contact' | 'privacy' | 'terms' | 'not-found' | 'ai-investigation' | 'ai-briefing' | 'dashboard-settings';
 
 
 export type CameraSourceType = 'rtsp' | 'webcam' | 'file' | 'simulation';

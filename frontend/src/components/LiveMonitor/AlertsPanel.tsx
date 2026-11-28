@@ -34,9 +34,9 @@ export const AlertsPanel: React.FC = () => {
   ];
 
   return (
-    <div className="w-full md:w-[320px] md:min-w-[320px] min-h-[200px] md:min-h-0 md:h-auto bg-surface border-t md:border-t-0 md:border-l border-border-default flex flex-col overflow-hidden select-none">
+    <div className="spatial-glass-nav w-full md:w-[320px] md:min-w-[320px] min-h-[200px] md:min-h-0 md:h-auto border-t md:border-t-0 md:border-l border-border-default flex flex-col overflow-hidden select-none">
       {/* Header */}
-      <div className="p-3 px-3.5 pb-2.5 border-b border-border-default shrink-0 bg-surface-subtle">
+      <div className="p-3 px-3.5 pb-2.5 border-b border-border-subtle shrink-0">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-bold font-display text-txt-primary">Live Alert Stream</span>
           <span className="text-[10px] font-bold bg-rose-500/10 text-rose-500 border border-rose-500/25 px-2 py-0.5 rounded-full">
@@ -50,10 +50,10 @@ export const AlertsPanel: React.FC = () => {
             <button
               key={fb.id}
               onClick={() => setFilter(fb.id)}
-              className={`text-[10px] px-2.5 py-1 rounded-lg border transition-all cursor-pointer whitespace-nowrap ${
+              className={`text-[10px] px-2.5 py-1 rounded-[8px] border transition-all cursor-pointer whitespace-nowrap ${
                 filter === fb.id
-                  ? 'bg-[#0b8d8b] text-white border-transparent font-bold shadow-xs'
-                  : 'border-border-default bg-surface text-txt-muted hover:text-txt-primary'
+                  ? 'bg-primary text-primary-text border-transparent font-bold shadow-xs'
+                  : 'border-border-default bg-surface/65 text-txt-muted hover:text-txt-primary hover:bg-surface'
               }`}
             >
               {fb.label}
@@ -75,25 +75,24 @@ export const AlertsPanel: React.FC = () => {
               <div
                 key={a.id}
                 onClick={() => openLightbox(a.id)}
-                className={`flex items-start gap-3 p-3 cursor-pointer transition-colors duration-100 hover:bg-surface-subtle ${
+                className={`flex items-start gap-3 p-3 cursor-pointer transition-colors duration-150 hover:bg-primary-surface/45 ${
                   isNew ? 'bg-rose-500/5 border-l-2 border-rose-500' : ''
                 }`}
               >
-                {/* Clean Threat Icon / Thumbnail */}
                 {a.snapshot ? (
                   <div className="w-8 h-8 rounded-lg shrink-0 overflow-hidden border border-border-default relative shadow-xs">
                     <img src={a.snapshot} alt="Captured" className="w-full h-full object-cover" />
                   </div>
                 ) : (
-                  <div className={`w-8 h-8 rounded-lg shrink-0 flex items-center justify-center text-sm shadow-xs ${
+                  <span className={`w-5 h-5 mt-0.5 shrink-0 flex items-center justify-center text-base ${
                     isHigh
-                      ? 'bg-rose-500/10 text-rose-500'
+                      ? 'text-rose-500'
                       : a.sev === 'med'
-                      ? 'bg-amber-500/10 text-amber-500'
-                      : 'bg-teal-500/10 text-[#0b8d8b]'
+                      ? 'text-amber-500'
+                      : 'text-primary'
                   }`}>
-                    <i className={`ti ${meta.icon}`} />
-                  </div>
+                    <i className={`ti ${meta.icon}`} aria-hidden="true" />
+                  </span>
                 )}
 
                 <div className="flex-1 min-w-0">
@@ -135,7 +134,7 @@ export const AlertsPanel: React.FC = () => {
       </div>
 
       {/* Footer Summary */}
-      <div className="p-2.5 px-3.5 border-t border-border-default shrink-0 flex items-center justify-between bg-surface-subtle text-xs text-txt-muted">
+      <div className="p-2.5 px-3.5 border-t border-border-subtle shrink-0 flex items-center justify-between text-xs text-txt-muted">
         <span>Critical: <strong className="text-rose-500 font-mono">{criticalCount}</strong></span>
         <span>Warning: <strong className="text-amber-500 font-mono">{warningCount}</strong></span>
         <span>Total: <strong className="text-txt-primary font-mono">{alerts.length}</strong></span>

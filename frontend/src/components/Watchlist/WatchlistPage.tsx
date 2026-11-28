@@ -1,8 +1,8 @@
-import React, { FormEvent, useEffect, useMemo, useState } from 'react';
+import React, { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../services/api';
 import { WatchlistEntry } from '../../types';
 import { useApp } from '../../context/AppContext';
-import { enrollReferencePhoto, removeReferenceSignature } from '../../services/faceMatcher';
+import { SpatialOverlay } from '../Spatial/MotionPrimitives';
 
 const DEFAULT_SITE_ID = 'site-alpha';
 
@@ -13,11 +13,31 @@ export const WatchlistPage: React.FC = () => {
 
   const [entries, setEntries] = useState<WatchlistEntry[]>([]);
   const [referenceOnly, setReferenceOnly] = useState(true);
+  const [infoOpen, setInfoOpen] = useState(false);
   const [name, setName] = useState('');
   const [photo, setPhoto] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const infoRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!infoOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setInfoOpen(false);
+    };
+    const onPointerDown = (event: MouseEvent) => {
+      if (infoRef.current && !infoRef.current.contains(event.target as Node)) {
+        setInfoOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    document.addEventListener('mousedown', onPointerDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('mousedown', onPointerDown);
+    };
+  }, [infoOpen]);
 
   const activeEntries = useMemo(() => entries.filter(entry => entry.active), [entries]);
 
@@ -63,9 +83,6 @@ export const WatchlistPage: React.FC = () => {
         photoUrl: created.photoUrl || localPhotoUrl,
       };
       setEntries(previous => [withPhoto, ...previous]);
-      if (withPhoto.photoUrl) {
-        void enrollReferencePhoto(withPhoto.id, withPhoto.name, withPhoto.photoUrl);
-      }
       setName('');
       setPhoto(null);
       const input = document.getElementById('watchlist-photo') as HTMLInputElement | null;
@@ -94,7 +111,6 @@ export const WatchlistPage: React.FC = () => {
     try {
       const updated = await api.deactivateWatchlistEntry(entry.id, siteId, currentUser?.accessToken);
       setEntries(previous => previous.map(item => item.id === updated.id ? updated : item));
-      removeReferenceSignature(entry.id);
       showNotice('success', `${entry.name} was deactivated.`);
       await refreshWatchlist?.();
     } catch (err: any) {
@@ -103,63 +119,89 @@ export const WatchlistPage: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 max-w-[1300px] w-full mx-auto">
-      <div className="flex flex-col gap-1 mb-6">
-        <div className="text-sm text-txt-muted">Operations / Identity references</div>
-        <h1 className="text-3xl font-extrabold tracking-tight text-txt-primary">Watchlist references</h1>
-        <p className="text-base text-txt-secondary max-w-3xl">
-          Add encrypted reference photos for supervised watchlist workflows. These records are not identity matches until a governed embedding provider is configured.
-        </p>
+    <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 max-w-[1300px] w-full mx-auto space-y-5 bg-transparent">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+        <div>
+          <div className="text-[11px] font-medium text-txt-muted">Operations / Identity references</div>
+          <h1 className="text-2xl md:text-[26px] font-extrabold tracking-tight text-txt-primary font-display mt-0.5 leading-tight">
+            Watchlist references
+          </h1>
+        </div>
+
+        <div ref={infoRef} className="relative flex items-center gap-2 shrink-0">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-primary-border bg-primary-surface/80 px-3 py-1 text-xs font-bold text-primary">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+            <span>{referenceOnly ? 'Reference only — matching disabled' : 'Managed matcher active'}</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setInfoOpen(prev => !prev)}
+            aria-label="Reference-only mode information"
+            aria-expanded={infoOpen}
+            className="w-7 h-7 rounded-full border border-border-default bg-surface/75 text-txt-muted hover:text-primary hover:bg-primary-surface/60 flex items-center justify-center transition-colors cursor-pointer"
+          >
+            <i className="ti ti-info-circle text-sm" aria-hidden="true" />
+          </button>
+
+          {infoOpen && (
+            <SpatialOverlay
+              role="dialog"
+              aria-label="Reference-only mode technical details"
+              className="ui-popover spatial-glass-overlay absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] p-3.5 z-40 text-xs text-txt-secondary leading-relaxed"
+            >
+              <div className="font-bold text-txt-primary mb-1">
+                {referenceOnly ? 'Reference-only mode' : 'Managed matcher mode'}
+              </div>
+              {referenceOnly
+                ? 'Validates face presence, encrypts original bytes with AES-256-GCM, and stores SHA-256 metadata. Identity matching and confidence scoring remain disabled until a governed embedding provider is configured.'
+                : 'Configured identity provider active. Review provenance and confidence policy before operational use.'}
+            </SpatialOverlay>
+          )}
+        </div>
       </div>
 
-       <div className="rounded-2xl border border-cyan-200 dark:border-cyan-900/60 bg-cyan-50/80 dark:bg-cyan-950/30 p-4 mb-6 text-sm text-cyan-950 dark:text-cyan-100">
-         <strong>{referenceOnly ? 'Reference-only mode:' : 'Managed matcher mode:'}</strong>{' '}
-         {referenceOnly
-           ? 'the service validates that an image contains a face, encrypts the original bytes, and stores integrity metadata. It does not claim recognition accuracy or return a match score.'
-           : 'the configured identity provider is active; review its provenance and confidence policy before operational use.'}
-       </div>
-
       {!currentUser?.accessToken && !canManage && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900/60 p-4 text-base text-amber-950 dark:text-amber-100">
-          Sign in with an authorised account to manage site watchlist references.
+        <div className="spatial-operational rounded-[10px] border-amber-300/70 bg-status-warning-surface/90 px-4 py-3 text-sm font-semibold text-status-warning flex items-center gap-2">
+          <i className="ti ti-lock text-base shrink-0" aria-hidden="true" />
+          <span>Authorized sign-in required.</span>
         </div>
       )}
 
       {canManage && (
-        <form onSubmit={handleSubmit} className="rounded-2xl border border-border-default bg-surface p-5 shadow-sm mb-6">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <div>
-              <h2 className="text-xl font-bold text-txt-primary">Add a reference</h2>
-              <p className="text-sm text-txt-muted mt-1">Site: {siteId}</p>
+        <form onSubmit={handleSubmit} className="spatial-glass p-5">
+          <div className="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-border-subtle">
+            <div className="flex items-center gap-2.5">
+              <h2 className="text-base font-bold font-display text-txt-primary">Add a reference</h2>
+              <span className="rounded-full px-2.5 py-0.5 text-xs font-mono font-semibold bg-surface/75 border border-border-subtle text-txt-muted">{siteId}</span>
             </div>
-            <span className="rounded-full px-3 py-1 text-xs font-bold bg-slate-100 dark:bg-slate-800 text-txt-secondary">Encrypted at rest</span>
+            <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold bg-surface/75 border border-border-subtle text-txt-secondary">Encrypted at rest</span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-4 items-end">
-            <label className="flex flex-col gap-1.5 text-sm font-semibold text-txt-secondary">
+            <label className="flex flex-col gap-1.5 text-xs font-semibold text-txt-secondary">
               Label
               <input
                 value={name}
                 onChange={event => setName(event.target.value)}
                 placeholder="e.g. Person of interest 014"
-                className="h-11 rounded-xl border border-border-default bg-surface-subtle px-3 text-base text-txt-primary outline-none focus:ring-2 focus:ring-cyan-400"
+                className="h-10 rounded-[10px] border border-border-default bg-surface/85 px-3 text-sm text-txt-primary outline-none focus:ring-2 focus:ring-primary-border"
                 maxLength={160}
               />
             </label>
-            <label className="flex flex-col gap-1.5 text-sm font-semibold text-txt-secondary">
+            <label className="flex flex-col gap-1.5 text-xs font-semibold text-txt-secondary">
               Face photo
               <input
                 id="watchlist-photo"
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 onChange={event => setPhoto(event.target.files?.[0] || null)}
-                className="h-11 rounded-xl border border-border-default bg-surface-subtle px-2 py-2 text-sm text-txt-primary file:mr-3 file:rounded-lg file:border-0 file:bg-cyan-100 file:px-3 file:py-1 file:font-semibold file:text-cyan-900"
+                className="h-10 rounded-[10px] border border-border-default bg-surface/85 px-2 py-1.5 text-xs text-txt-primary file:mr-3 file:rounded-md file:border-0 file:bg-primary-surface file:px-3 file:py-1 file:font-semibold file:text-primary"
               />
             </label>
             <button
               type="submit"
               disabled={submitting}
-              className="h-11 rounded-xl bg-gradient-to-r from-cyan-700 to-teal-600 px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="h-10 rounded-[10px] brand-button px-5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               {submitting ? 'Saving…' : 'Add reference'}
             </button>
@@ -168,55 +210,57 @@ export const WatchlistPage: React.FC = () => {
       )}
 
       {error && (
-        <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 dark:bg-rose-950/30 dark:border-rose-900/60 p-4 mb-5 text-sm text-rose-900 dark:text-rose-100">
+        <div role="alert" className="spatial-operational border-status-danger-border bg-status-danger-surface/90 p-4 text-sm text-status-danger">
           {error}
         </div>
       )}
 
-      <section className="rounded-2xl border border-border-default bg-surface shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-border-subtle">
-          <div>
-            <h2 className="text-xl font-bold text-txt-primary">Active references</h2>
-            <p className="text-sm text-txt-muted mt-1">{activeEntries.length} active reference{activeEntries.length === 1 ? '' : 's'} for {siteId}</p>
+      <section className="spatial-glass overflow-hidden">
+        <div className="flex items-center justify-between gap-4 px-5 py-3.5 border-b border-border-subtle">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h2 className="text-base font-bold font-display text-txt-primary">Active references</h2>
+            <span className="rounded-full px-2.5 py-0.5 text-xs font-mono font-bold bg-surface/75 border border-border-subtle text-txt-secondary">
+              {activeEntries.length} · {siteId}
+            </span>
           </div>
-          <button onClick={() => void loadEntries()} className="rounded-lg border border-border-default px-3 py-2 text-sm font-semibold text-txt-secondary hover:bg-surface-subtle">
+          <button onClick={() => void loadEntries()} className="rounded-[10px] border border-border-default bg-surface/70 px-3 py-1.5 text-xs font-semibold text-txt-secondary hover:text-txt-primary hover:bg-surface">
             Refresh
           </button>
         </div>
 
         {loading ? (
-          <div className="p-8 text-center text-base text-txt-muted">Loading watchlist references…</div>
+          <div className="p-8 text-center text-sm text-txt-muted">Loading watchlist references…</div>
         ) : activeEntries.length === 0 ? (
-          <div className="p-10 text-center">
-            <div className="text-lg font-bold text-txt-primary">No active references</div>
-            <p className="text-base text-txt-muted mt-2">Add a clear face photo above, or wait for an authorised site administrator to configure the list.</p>
+          <div className="p-8 text-center">
+            <div className="text-sm font-bold text-txt-primary">No references yet</div>
+            {!currentUser?.accessToken && !canManage && (
+              <div className="text-xs text-txt-muted mt-1">Authorized sign-in required.</div>
+            )}
           </div>
         ) : (
-          <div className="divide-y divide-border-subtle">
+          <div className="divide-y divide-border-subtle bg-surface/40">
             {activeEntries.map(entry => (
-              <div key={entry.id} className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-5 py-4">
+              <div key={entry.id} className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-5 py-4 hover:bg-primary-surface/35 transition-colors">
                 <div className="flex items-center gap-3.5 min-w-0">
                   {entry.photoUrl ? (
                     <img
                       src={entry.photoUrl}
                       alt={entry.name}
-                      className="w-12 h-12 rounded-xl object-cover border border-cyan-500/40 shadow-sm shrink-0"
+                      className="w-12 h-12 rounded-[10px] object-cover border border-primary-border shadow-xs shrink-0"
                     />
                   ) : (
-                    <div className="w-12 h-12 rounded-xl bg-surface-subtle border border-border-default flex items-center justify-center shrink-0 text-txt-muted">
-                      <i className="ti ti-user text-xl" />
-                    </div>
+                    <i className="ti ti-user text-xl text-txt-muted shrink-0" aria-hidden="true" />
                   )}
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-base font-bold text-txt-primary truncate">{entry.name}</h3>
-                      <span className="rounded-full bg-emerald-100 dark:bg-emerald-950/50 px-2 py-0.5 text-xs font-bold text-emerald-800 dark:text-emerald-200">Active</span>
+                      <h3 className="text-sm font-bold text-txt-primary truncate">{entry.name}</h3>
+                      <span className="rounded-full bg-status-success-surface px-2 py-0.5 text-[11px] font-bold text-status-success">Active</span>
                     </div>
-                    <p className="text-sm text-txt-muted mt-1">{entry.faceCount || 1} face detected · {entry.matcherMode || 'reference_only'}</p>
-                    <p className="font-mono text-xs text-txt-muted mt-1 truncate" title={entry.sha256 || undefined}>SHA-256: {entry.sha256?.slice(0, 20) || 'stored securely'}…</p>
+                    <p className="text-xs text-txt-muted mt-0.5">{entry.faceCount || 1} face detected · {entry.matcherMode || 'reference_only'}</p>
+                    <p className="font-mono text-[11px] text-txt-muted mt-0.5 truncate" title={entry.sha256 || undefined}>SHA-256: {entry.sha256?.slice(0, 20) || 'stored securely'}…</p>
                   </div>
                 </div>
-                <button onClick={() => void deactivate(entry)} className="self-start md:self-center rounded-lg border border-rose-200 dark:border-rose-900/60 px-3 py-2 text-sm font-semibold text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40">
+                <button onClick={() => void deactivate(entry)} className="self-start md:self-center rounded-[10px] border border-status-danger-border bg-surface/75 px-3 py-1.5 text-xs font-semibold text-status-danger hover:bg-status-danger-surface">
                   Deactivate
                 </button>
               </div>

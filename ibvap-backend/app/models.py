@@ -413,6 +413,7 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     username = Column(String, unique=True, nullable=False)
+    email = Column(String, unique=True, nullable=True)
     hashed_password = Column(String, nullable=False)
     role = Column(String, nullable=False)  # operator | supervisor | admin
     failed_attempts = Column(Integer, default=0)

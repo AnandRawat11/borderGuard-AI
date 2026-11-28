@@ -13,7 +13,7 @@ test('watchlist UI is an explicit route and does not include seed records', () =
 
   assert.match(app, /currentPage === 'watchlist'/);
   assert.match(sidebar, /Watchlist references/);
-  assert.match(page, /No active references/);
+  assert.match(page, /No references yet/);
   assert.match(page, /reference-only/i);
 });
 

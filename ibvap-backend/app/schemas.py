@@ -502,12 +502,19 @@ class LoginRequest(CamelModel):
     password: str
 
 
+class RegisterRequest(CamelModel):
+    username: str
+    password: str
+    email: str | None = None
+
+
 class TokenResponse(CamelModel):
     access_token: str
     token_type: str = "bearer"
     role: str
     username: str
     site_ids: List[str] = ["*"]
+    email: str | None = None
 
 
 # ---------- Ledger & Blockchain Anchoring ----------

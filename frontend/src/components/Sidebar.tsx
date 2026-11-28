@@ -1,6 +1,8 @@
 import React, { useEffect } from 'react';
+import { motion } from 'motion/react';
 import { useApp } from '../context/AppContext';
 import { PageId } from '../types';
+import { SPATIAL_SPRING } from './Spatial/MotionPrimitives';
 
 interface NavItem {
   id: PageId;
@@ -10,8 +12,6 @@ interface NavItem {
   isLive?: boolean;
   adminOnly?: boolean;
   filterType?: string;
-  accentColor?: string;
-  softBg?: string;
 }
 
 export const Sidebar: React.FC = () => {
@@ -28,6 +28,7 @@ export const Sidebar: React.FC = () => {
   } = useApp();
 
   const criticalCount = alerts.filter(a => a.sev === 'high' && !a.reviewed).length;
+  const evidenceCount = alerts.filter(a => Boolean(a.snapshot || a.evidenceHash || a.reviewed)).length;
   const isAdmin = currentUser?.role === 'admin';
 
   useEffect(() => {
@@ -39,327 +40,201 @@ export const Sidebar: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [mobileMenuOpen, closeMobileMenu]);
 
-  // SURVEILLANCE section – highest priority, always visible at top
   const surveillanceNav: NavItem[] = [
-    { id: 'monitor', label: 'Live monitor', icon: 'ti-video', isLive: true, accentColor: 'var(--red)', softBg: 'var(--red-soft)' },
-    { id: 'camgrid', label: 'Camera feeds', icon: 'ti-layout-grid', accentColor: 'var(--teal)', softBg: 'var(--teal-soft)' },
-    { id: 'alerts', label: 'Alert feed', icon: 'ti-bell-ringing', count: criticalCount, accentColor: 'var(--orange)', softBg: 'var(--orange-soft)' },
+    { id: 'monitor', label: 'Live monitor', icon: 'ti-video', isLive: true },
+    { id: 'camgrid', label: 'Camera feeds', icon: 'ti-device-cctv' },
+    { id: 'alerts', label: 'Alert feed', icon: 'ti-bell-ringing', count: criticalCount },
   ];
 
-  // WORKSPACE section – overview, evidence, analytics
   const workspaceNav: NavItem[] = [
-    { id: 'dashboard', label: 'Overview', icon: 'ti-home', accentColor: 'var(--teal)', softBg: 'var(--teal-soft)' },
-    { id: 'alerts', label: 'Evidence vault', icon: 'ti-archive', count: alerts.length, accentColor: 'var(--blue)', softBg: 'var(--blue-soft)' },
-    { id: 'analytics', label: 'Event timeline', icon: 'ti-history', accentColor: 'var(--purple)', softBg: 'var(--purple-soft)' },
+    { id: 'dashboard', label: 'Overview', icon: 'ti-layout-dashboard' },
+    { id: 'vault', label: 'Evidence vault', icon: 'ti-archive', count: evidenceCount },
+    { id: 'analytics', label: 'Event timeline', icon: 'ti-history' },
   ];
 
-  // SYSTEM section – audit, settings
   const systemNav: NavItem[] = [
-    { id: 'models', label: 'Audit & access', icon: 'ti-shield-lock', accentColor: 'var(--purple)', softBg: 'var(--purple-soft)' },
-    { id: 'watchlist', label: 'Watchlist references', icon: 'ti-fingerprint', accentColor: 'var(--cyan)', softBg: 'var(--teal-soft)' },
-    { id: 'features', label: 'Feature controls', icon: 'ti-adjustments-horizontal', accentColor: 'var(--teal)', softBg: 'var(--teal-soft)' },
-    { id: 'cam-config', label: 'Settings', icon: 'ti-settings', adminOnly: false, accentColor: 'var(--blue)', softBg: 'var(--blue-soft)' },
-    { id: 'dashboard-settings', label: 'Dashboard config', icon: 'ti-tool', adminOnly: true, accentColor: 'var(--blue)', softBg: 'var(--blue-soft)' },
+    { id: 'models', label: 'Audit & access', icon: 'ti-shield-lock' },
+    { id: 'watchlist', label: 'Watchlist references', icon: 'ti-fingerprint' },
+    { id: 'features', label: 'Feature controls', icon: 'ti-adjustments-horizontal' },
+    { id: 'cam-config', label: 'Settings', icon: 'ti-settings', adminOnly: false },
+    { id: 'dashboard-settings', label: 'Dashboard config', icon: 'ti-adjustments', adminOnly: true },
   ];
 
-  // INTELLIGENCE section – Agent37 AI features
   const intelligenceNav: NavItem[] = [
-    { id: 'ai-investigation', label: 'Incident investigation', icon: 'ti-brain', accentColor: '#8b5cf6', softBg: 'rgba(139,92,246,0.12)' },
-    { id: 'ai-briefing', label: 'Surveillance briefing', icon: 'ti-file-report', accentColor: '#0ea5e9', softBg: 'rgba(14,165,233,0.12)' },
+    { id: 'ai-investigation', label: 'Incident investigation', icon: 'ti-brain' },
+    { id: 'ai-briefing', label: 'Surveillance briefing', icon: 'ti-file-report' },
   ];
+
+  const renderSectionHeader = (title: string) =>
+    (!sidebarCollapsed || mobileMenuOpen) ? (
+      <div className="px-3 pb-1 text-[9.5px] font-bold uppercase tracking-[0.14em] text-txt-muted/85">
+        {title}
+      </div>
+    ) : (
+      <div className="w-5 h-[1px] bg-border-default/60 mx-auto my-2" />
+    );
+
+  const renderNavItem = (item: NavItem, textSizeClass: string, badgeStyle: 'warn' | 'neutral' | 'ai' = 'neutral') => {
+    const isRestricted = Boolean(item.adminOnly && !isAdmin);
+    const isActive = currentPage === item.id;
+    const isExpanded = !sidebarCollapsed || mobileMenuOpen;
+
+    return (
+      <button
+        key={item.id + item.label}
+        onClick={() => {
+          if (isRestricted) {
+            showNotice('error', 'Administrator permission required.');
+            return;
+          }
+          goToPage(item.id);
+        }}
+        title={item.label}
+        aria-label={item.label}
+        className={`relative w-full flex items-center gap-2.5 px-2.5 py-2 rounded-[10px] text-left transition-colors ${
+          !isExpanded ? 'justify-center px-1.5' : ''
+        } ${
+          isRestricted
+            ? 'opacity-40 cursor-not-allowed text-txt-secondary'
+            : isActive
+            ? 'text-primary font-semibold'
+            : 'text-txt-secondary hover:bg-primary-surface/55 hover:text-primary'
+        }`}
+      >
+        {isActive && !isRestricted && (
+          <motion.span
+            layoutId="sidebar-active-pill"
+            transition={SPATIAL_SPRING}
+            aria-hidden="true"
+            className="absolute inset-0 rounded-[10px] bg-primary-surface/95 border border-primary-border/80 shadow-xs pointer-events-none"
+          />
+        )}
+
+        <div className="relative z-[1] shrink-0 w-5 h-5 flex items-center justify-center">
+          <i className={`ti ${item.icon} nav-icon text-[17px] leading-none`} aria-hidden="true" />
+          {!isExpanded && item.isLive && (
+            <span className="absolute -top-0.5 -right-1 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-surface" />
+          )}
+          {!isExpanded && (item.count ?? 0) > 0 && !item.isLive && (
+            <span
+              className={`absolute -top-1 -right-1.5 min-w-[14px] h-[14px] px-0.5 rounded-full text-white font-bold text-[8px] flex items-center justify-center ring-2 ring-surface ${
+                badgeStyle === 'warn' ? 'bg-amber-500' : 'bg-primary text-primary-text'
+              }`}
+            >
+              {item.count}
+            </span>
+          )}
+        </div>
+
+        {isExpanded && (
+          <span className={`relative z-[1] flex-1 ${textSizeClass} truncate`}>
+            {item.label}
+          </span>
+        )}
+
+        {isExpanded && item.isLive && (
+          <span className="relative z-[1] ml-auto bg-status-danger-surface/90 text-status-danger border border-status-danger-border font-bold text-[9px] px-2 py-0.5 rounded-full tracking-wider">
+            LIVE
+          </span>
+        )}
+
+        {isExpanded && !item.isLive && item.count !== undefined && (
+          <span
+            className={`relative z-[1] ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full tabular-nums ${
+              isActive
+                ? 'bg-surface text-primary'
+                : 'bg-surface/75 text-txt-muted border border-border-subtle'
+            }`}
+          >
+            {item.count}
+          </span>
+        )}
+
+        {isExpanded && badgeStyle === 'ai' && isActive && (
+          <span className="relative z-[1] ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-surface text-primary uppercase tracking-wider">
+            AI
+          </span>
+        )}
+      </button>
+    );
+  };
 
   return (
     <>
-      {/* Mobile Drawer Overlay */}
       {mobileMenuOpen && (
         <div
-          className="fixed inset-0 z-[90] bg-black/60 backdrop-blur-xs md:hidden transition-opacity"
+          className="fixed inset-0 z-[90] bg-slate-950/25 backdrop-blur-sm md:hidden transition-opacity"
           onClick={closeMobileMenu}
           aria-hidden="true"
         />
       )}
 
-      {/* Main Sidebar Shell */}
       <aside
         aria-label="Navigation Sidebar"
-        className={`fixed inset-y-0 left-0 z-[100] bg-surface border-r border-border-default flex flex-col overflow-hidden select-none transition-all duration-200 md:static ${
+        className={`spatial-glass-nav fixed inset-y-0 left-0 z-[100] border-r border-border-default flex flex-col overflow-hidden select-none transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] md:static ${
           sidebarCollapsed ? 'md:w-16 md:min-w-[64px]' : 'md:w-[240px] md:min-w-[240px]'
-        } ${mobileMenuOpen ? 'translate-x-0 w-[240px] shadow-2xl' : '-translate-x-full md:translate-x-0'}`}
+        } ${mobileMenuOpen ? 'translate-x-0 w-[240px] shadow-elevated' : '-translate-x-full md:translate-x-0'}`}
       >
-        {/* Top Header / Collapse Rail Toggle */}
-        <div className={`h-11 border-b border-border-default/60 flex items-center px-3 shrink-0 ${
+        <div className={`h-11 border-b border-border-subtle flex items-center px-3 shrink-0 ${
           sidebarCollapsed ? 'justify-center' : 'justify-between'
         }`}>
           {(!sidebarCollapsed || mobileMenuOpen) ? (
             <div className="flex items-center gap-2 overflow-hidden">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-              <span className="text-[10px] font-extrabold text-txt-muted uppercase tracking-widest truncate">Sentry Rail</span>
+              <span className="w-2 h-2 rounded-full bg-online shrink-0" />
+              <span className="text-[10px] font-bold text-txt-muted uppercase tracking-[0.14em] truncate">Sentry Rail</span>
             </div>
           ) : null}
           <button
             onClick={toggleSidebar}
-            aria-label={sidebarCollapsed ? "Expand navigation sidebar" : "Collapse navigation sidebar"}
-            title={sidebarCollapsed ? "Expand navigation sidebar" : "Collapse navigation sidebar"}
-            className="hidden md:flex p-1.5 rounded-lg text-txt-muted hover:text-txt-primary hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            aria-label={sidebarCollapsed ? 'Expand navigation sidebar' : 'Collapse navigation sidebar'}
+            title={sidebarCollapsed ? 'Expand navigation sidebar' : 'Collapse navigation sidebar'}
+            className="hidden md:flex p-1.5 rounded-lg text-txt-muted hover:text-primary hover:bg-primary-surface/70 transition-colors cursor-pointer"
           >
             <i className={`ti ${sidebarCollapsed ? 'ti-layout-sidebar-left-expand' : 'ti-layout-sidebar-left-collapse'} text-sm`} />
           </button>
         </div>
 
-        <div className="flex-1 py-3 px-2 overflow-y-auto space-y-4">
-          
-          {/* Section 1: SURVEILLANCE (top priority) */}
+        <div className="flex-1 py-3 px-2.5 overflow-y-auto space-y-4">
           <div>
-            {(!sidebarCollapsed || mobileMenuOpen) ? (
-              <div className="px-3 pb-1 text-[9.5px] font-extrabold uppercase tracking-widest text-[#9aa7b5]">
-                SURVEILLANCE
-              </div>
-            ) : (
-              <div className="w-5 h-[1px] bg-border-default/50 mx-auto my-1.5" />
-            )}
+            {renderSectionHeader('SURVEILLANCE')}
             <div className="space-y-0.5">
-              {surveillanceNav.map(item => {
-                const isActive = currentPage === item.id;
-                return (
-                  <button
-                    key={item.id + item.label}
-                    onClick={() => goToPage(item.id)}
-                    title={item.label}
-                    className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left transition-all ${
-                      sidebarCollapsed && !mobileMenuOpen ? 'justify-center px-1' : ''
-                    } ${
-                      isActive
-                        ? 'bg-gradient-to-r from-teal-500/15 to-blue-500/10 text-primary font-bold shadow-xs'
-                        : 'text-[#55697e] dark:text-slate-300 hover:bg-[#f3f7fa] dark:hover:bg-white/5 hover:translate-x-0.5'
-                    }`}
-                  >
-                    <div className="relative shrink-0">
-                      <span
-                        className="w-7 h-7 rounded-lg flex items-center justify-center text-sm shrink-0 transition-transform shadow-xs"
-                        style={{
-                          backgroundColor: isActive ? 'var(--teal)' : item.softBg,
-                          color: isActive ? '#ffffff' : item.accentColor
-                        }}
-                      >
-                        <i className={`ti ${item.icon}`} />
-                      </span>
-                      {sidebarCollapsed && !mobileMenuOpen && item.isLive && (
-                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-surface animate-pulse" />
-                      )}
-                      {sidebarCollapsed && !mobileMenuOpen && (item.count ?? 0) > 0 && !item.isLive && (
-                        <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-0.5 rounded-full bg-amber-500 text-white font-black text-[8px] flex items-center justify-center ring-2 ring-surface">
-                          {item.count}
-                        </span>
-                      )}
-                    </div>
-
-                    {(!sidebarCollapsed || mobileMenuOpen) && (
-                      <span className="flex-1 text-[13px] truncate">
-                        {item.label}
-                      </span>
-                    )}
-
-                    {(!sidebarCollapsed || mobileMenuOpen) && (
-                      item.isLive ? (
-                        <span className="ml-auto bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 font-extrabold text-[9px] px-2 py-0.5 rounded-full tracking-wider animate-pulse">
-                          LIVE
-                        </span>
-                      ) : item.count !== undefined ? (
-                        <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          isActive
-                            ? 'bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-300'
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
-                        }`}>
-                          {item.count}
-                        </span>
-                      ) : null
-                    )}
-                  </button>
-                );
-              })}
+              {surveillanceNav.map(item => renderNavItem(item, 'text-[13px]', 'warn'))}
             </div>
           </div>
 
-          {/* Section 2: WORKSPACE */}
           <div>
-            {(!sidebarCollapsed || mobileMenuOpen) ? (
-              <div className="px-3 pb-1 text-[9.5px] font-extrabold uppercase tracking-widest text-[#9aa7b5]">
-                WORKSPACE
-              </div>
-            ) : (
-              <div className="w-5 h-[1px] bg-border-default/50 mx-auto my-1.5" />
-            )}
+            {renderSectionHeader('WORKSPACE')}
             <div className="space-y-0.5">
-              {workspaceNav.map(item => {
-                const isActive = currentPage === item.id;
-                return (
-                  <button
-                    key={item.id + item.label}
-                    onClick={() => goToPage(item.id)}
-                    title={item.label}
-                    className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-left transition-all ${
-                      sidebarCollapsed && !mobileMenuOpen ? 'justify-center px-1' : ''
-                    } ${
-                      isActive
-                        ? 'bg-gradient-to-r from-teal-500/15 to-blue-500/10 text-primary font-bold shadow-xs'
-                        : 'text-[#55697e] dark:text-slate-300 hover:bg-[#f3f7fa] dark:hover:bg-white/5 hover:translate-x-0.5'
-                    }`}
-                  >
-                    <div className="relative shrink-0">
-                      <span
-                        className="w-6 h-6 rounded-md flex items-center justify-center text-xs shrink-0 shadow-xs"
-                        style={{
-                          backgroundColor: isActive ? 'var(--teal)' : item.softBg,
-                          color: isActive ? '#ffffff' : item.accentColor
-                        }}
-                      >
-                        <i className={`ti ${item.icon}`} />
-                      </span>
-                      {sidebarCollapsed && !mobileMenuOpen && (item.count ?? 0) > 0 && (
-                        <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-0.5 rounded-full bg-teal-600 text-white font-black text-[8px] flex items-center justify-center ring-2 ring-surface">
-                          {item.count}
-                        </span>
-                      )}
-                    </div>
-                    {(!sidebarCollapsed || mobileMenuOpen) && (
-                      <span className="flex-1 text-[12px] truncate">
-                        {item.label}
-                      </span>
-                    )}
-                    {(!sidebarCollapsed || mobileMenuOpen) && item.count !== undefined && (
-                      <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        isActive
-                          ? 'bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-300'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
-                      }`}>
-                        {item.count}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+              {workspaceNav.map(item => renderNavItem(item, 'text-[12.5px]', 'neutral'))}
             </div>
           </div>
 
-          {/* Section 3: SYSTEM */}
           <div>
-            {(!sidebarCollapsed || mobileMenuOpen) ? (
-              <div className="px-3 pb-1 text-[9.5px] font-extrabold uppercase tracking-widest text-[#9aa7b5]">
-                SYSTEM
-              </div>
-            ) : (
-              <div className="w-5 h-[1px] bg-border-default/50 mx-auto my-1.5" />
-            )}
+            {renderSectionHeader('SYSTEM')}
             <div className="space-y-0.5">
-              {systemNav.map(item => {
-                const isRestricted = item.adminOnly && !isAdmin;
-                const isActive = currentPage === item.id;
-                return (
-                  <button
-                    key={item.id + item.label}
-                    onClick={() => {
-                      if (isRestricted) {
-                        showNotice('error', 'Administrator role required for Sensor Calibration.');
-                        return;
-                      }
-                      goToPage(item.id);
-                    }}
-                    title={item.label}
-                    className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-left transition-all ${
-                      sidebarCollapsed && !mobileMenuOpen ? 'justify-center px-1' : ''
-                    } ${
-                      isRestricted
-                        ? 'opacity-40 cursor-not-allowed'
-                        : isActive
-                        ? 'bg-gradient-to-r from-teal-500/15 to-blue-500/10 text-primary font-bold shadow-xs'
-                        : 'text-[#55697e] dark:text-slate-300 hover:bg-[#f3f7fa] dark:hover:bg-white/5 hover:translate-x-0.5'
-                    }`}
-                  >
-                    <span
-                      className="w-6 h-6 rounded-md flex items-center justify-center text-xs shrink-0 shadow-xs"
-                      style={{
-                        backgroundColor: isActive ? 'var(--teal)' : item.softBg,
-                        color: isActive ? '#ffffff' : item.accentColor
-                      }}
-                    >
-                      <i className={`ti ${item.icon}`} />
-                    </span>
-                    {(!sidebarCollapsed || mobileMenuOpen) && (
-                      <span className="flex-1 text-[12px] truncate">
-                        {item.label}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+              {systemNav.map(item => renderNavItem(item, 'text-[12.5px]', 'neutral'))}
             </div>
           </div>
 
-          {/* Section 4: INTELLIGENCE (Agent37) */}
           <div>
-            {(!sidebarCollapsed || mobileMenuOpen) ? (
-              <div className="px-3 pb-1 text-[9.5px] font-extrabold uppercase tracking-widest" style={{ color: '#8b5cf6' }}>
-                INTELLIGENCE
-              </div>
-            ) : (
-              <div className="w-5 h-[1px] bg-border-default/50 mx-auto my-1.5" />
-            )}
+            {renderSectionHeader('INTELLIGENCE')}
             <div className="space-y-0.5">
-              {intelligenceNav.map(item => {
-                const isActive = currentPage === item.id;
-                return (
-                  <button
-                    key={item.id + item.label}
-                    onClick={() => goToPage(item.id)}
-                    title={item.label}
-                    className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-left transition-all ${
-                      sidebarCollapsed && !mobileMenuOpen ? 'justify-center px-1' : ''
-                    } ${
-                      isActive
-                        ? 'bg-gradient-to-r from-violet-500/15 to-blue-500/10 text-primary font-bold shadow-xs'
-                        : 'text-[#55697e] dark:text-slate-300 hover:bg-[#f3f7fa] dark:hover:bg-white/5 hover:translate-x-0.5'
-                    }`}
-                  >
-                    <span
-                      className="w-6 h-6 rounded-md flex items-center justify-center text-xs shrink-0 shadow-xs"
-                      style={{
-                        backgroundColor: isActive ? item.accentColor : item.softBg,
-                        color: isActive ? '#ffffff' : item.accentColor
-                      }}
-                    >
-                      <i className={`ti ${item.icon}`} />
-                    </span>
-                    {(!sidebarCollapsed || mobileMenuOpen) && (
-                      <span className="flex-1 text-[12px] truncate">
-                        {item.label}
-                      </span>
-                    )}
-                    {(!sidebarCollapsed || mobileMenuOpen) && isActive && (
-                      <span className="ml-auto text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-violet-500/20 text-violet-400 uppercase tracking-wider">
-                        AI
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+              {intelligenceNav.map(item => renderNavItem(item, 'text-[12.5px]', 'ai'))}
             </div>
           </div>
-
         </div>
 
-        {/* Sidebar Footer & Collapse Button */}
-        <div className="p-2.5 border-t border-border-default bg-surface-subtle flex items-center justify-between text-[11px] text-[#94a1ae]">
+        <div className="p-2.5 border-t border-border-subtle flex items-center justify-between text-[11px] text-txt-muted">
           {(!sidebarCollapsed || mobileMenuOpen) && (
-            <div className="text-[10px] text-[#94a1ae] leading-tight overflow-hidden pr-1">
-              <span className="font-bold text-txt-primary block truncate">IBVAP defense suite</span>
-              <div className="text-[9.5px] text-txt-muted truncate">Verified forensic audit</div>
+            <div className="text-[10px] text-txt-muted leading-tight overflow-hidden pr-1">
+              <span className="font-semibold text-txt-primary block truncate">IBVAP defense suite</span>
             </div>
           )}
           <button
             onClick={toggleSidebar}
-            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-txt-muted hover:text-txt-primary transition-colors mx-auto md:ml-auto cursor-pointer"
+            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className="p-1.5 rounded-lg hover:bg-primary-surface/70 text-txt-muted hover:text-primary transition-colors mx-auto md:ml-auto cursor-pointer"
           >
             <i className={`ti ${sidebarCollapsed ? 'ti-chevron-right' : 'ti-chevron-left'} text-sm`} />
           </button>

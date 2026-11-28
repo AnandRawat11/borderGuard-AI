@@ -121,30 +121,25 @@ def run_seed(db: Session):
         os.getenv("IBVAP_SEED_DEMO_USERS", "true").lower() == "true"
         and os.getenv("IBVAP_ENV", "development").lower() != "production"
     )
-    if seed_demo_users and db.query(models.User).count() == 0:
+    seed_demo_users = (
+        os.getenv("IBVAP_SEED_DEMO_USERS", "true").lower() == "true"
+        and os.getenv("IBVAP_ENV", "development").lower() != "production"
+    )
+    if seed_demo_users:
+        existing_users = {u.username.lower(): u for u in db.query(models.User).all()}
+        changed = False
         for username, password, role in DEMO_USERS:
-            db.add(models.User(
-                username=username,
-                hashed_password=hash_password(password),
-                role=role,
-            ))
-        db.commit()
-
-    if db.query(models.GovernanceApproval).count() == 0:
-        db.add(models.GovernanceApproval(
-            id="GOV-FACE-SITE-ALPHA",
-            site_id="site-alpha",
-            capability="face_recognition",
-            legal_approval_ref="LEGAL-SEC-2026-089A",
-            approved_by="HQ Legal Director",
-            restricted_mode=False
-        ))
-        db.add(models.GovernanceApproval(
-            id="GOV-ANPR-SITE-ALPHA",
-            site_id="site-alpha",
-            capability="anpr",
-            legal_approval_ref="LEGAL-MHA-2026-4421",
-            approved_by="HQ Legal Director",
-            restricted_mode=False
-        ))
-        db.commit()
+            existing = existing_users.get(username.lower())
+            if not existing:
+                db.add(models.User(
+                    username=username,
+                    email=f"{username}@borderguard.local",
+                    hashed_password=hash_password(password),
+                    role=role,
+                ))
+                changed = True
+            elif not getattr(existing, "email", None):
+                existing.email = f"{username}@borderguard.local"
+                changed = True
+        if changed:
+            db.commit()

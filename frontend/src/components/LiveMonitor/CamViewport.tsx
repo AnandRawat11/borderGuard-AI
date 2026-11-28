@@ -250,7 +250,6 @@ export const CamViewport: React.FC = () => {
       <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-rind-500">
         <i className="ti ti-video-off text-4xl mb-2"></i>
         <div className="text-sm font-bold text-rind-200">No Cameras Configured</div>
-        <div className="text-xs text-rind-500 mt-1">Register edge cameras or connect to backend.</div>
       </div>
     );
   }
@@ -279,9 +278,9 @@ export const CamViewport: React.FC = () => {
     : (metrics?.cameraTelemetry?.[cam.id]?.fps ?? cam.fps);
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden p-3 gap-2.5 min-w-0 bg-canvas text-txt-primary">
+    <div className="flex-1 flex flex-col overflow-hidden p-3 gap-2.5 min-w-0 bg-transparent text-txt-primary">
       {/* Unified Surveillance Feeds & Controls Header */}
-      <div className="flex items-center justify-between gap-3 shrink-0 bg-surface border border-border-default rounded-xl px-3 py-2 shadow-xs">
+      <div className="spatial-glass flex items-center justify-between gap-3 shrink-0 px-3.5 py-2">
         {/* Left: Camera Selector Tabs */}
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
           {cams.map(c => {
@@ -291,10 +290,10 @@ export const CamViewport: React.FC = () => {
                 key={c.id}
                 type="button"
                 onClick={() => selectCam(c.id)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-[8px] text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                   isSelected
-                    ? 'bg-[#0b8d8b] text-white shadow-xs'
-                    : 'bg-surface-subtle text-txt-muted hover:text-txt-primary hover:bg-surface-hover border border-border-subtle'
+                    ? 'bg-primary text-primary-text shadow-xs'
+                    : 'bg-surface/65 text-txt-muted hover:text-txt-primary hover:bg-surface border border-border-default'
                 }`}
               >
                 <span className={`w-2 h-2 rounded-full shrink-0 ${
@@ -309,13 +308,13 @@ export const CamViewport: React.FC = () => {
         {/* Right: Camera Status & Clean Action Tools */}
         <div className="flex items-center gap-2 shrink-0">
           {/* Status Badge */}
-          <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold ${
+          <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[8px] text-xs font-bold ${
             cam.online
               ? isCurrentCamWebcam
                 ? isHardwareWebcam
                   ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                  : 'bg-teal-500/10 text-[#0b8d8b] dark:text-cyan-300 border border-[#0b8d8b]/20'
-                : 'bg-teal-500/10 text-[#0b8d8b] dark:text-cyan-300 border border-[#0b8d8b]/20'
+                  : 'bg-primary-surface text-primary border border-primary/20'
+                : 'bg-primary-surface text-primary border border-primary/20'
               : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
           }`}>
             <span className={`w-1.5 h-1.5 rounded-full ${cam.online ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
@@ -332,7 +331,7 @@ export const CamViewport: React.FC = () => {
           {cam.online && isCurrentCamWebcam && !isHardwareWebcam && (
             <button
               onClick={startWebcam}
-              className="p-1 px-2.5 rounded-lg border border-teal-500/30 bg-teal-500/10 hover:bg-teal-500/20 text-[#0b8d8b] dark:text-teal-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="p-1 px-2.5 rounded-[8px] border border-primary-border bg-primary-surface hover:bg-primary/15 text-primary text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
               title="Connect physical device camera"
             >
               <i className="ti ti-camera text-sm" />
@@ -345,10 +344,10 @@ export const CamViewport: React.FC = () => {
               {/* Snapshot / Freeze Toggle Button */}
               <button
                 onClick={handleCaptureSingleFrame}
-                className={`p-1.5 px-2.5 rounded-lg border text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer ${
+                className={`p-1.5 px-2.5 rounded-[8px] border text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer ${
                   frozenFrameUrl
                     ? 'bg-amber-500/15 text-amber-500 border-amber-500/30'
-                    : 'bg-surface-subtle text-txt-muted hover:text-txt-primary border-border-default'
+                    : 'bg-surface/70 text-txt-muted hover:text-txt-primary border-border-default'
                 }`}
                 title={frozenFrameUrl ? 'Resume Live Feed' : 'Snapshot / Freeze Frame'}
               >
@@ -359,10 +358,10 @@ export const CamViewport: React.FC = () => {
               {/* Night Mode IR Toggle */}
               <button
                 onClick={() => toggleCamNight(cam.id)}
-                className={`p-1.5 px-2.5 rounded-lg border text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer ${
+                className={`p-1.5 px-2.5 rounded-[8px] border text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer ${
                   cam.night
-                    ? 'bg-violet-500/15 text-violet-400 border-violet-500/30'
-                    : 'bg-surface-subtle text-txt-muted hover:text-txt-primary border-border-default'
+                    ? 'bg-violet-500/15 text-violet-500 border-violet-500/30'
+                    : 'bg-surface/70 text-txt-muted hover:text-txt-primary border-border-default'
                 }`}
                 title="Toggle Night Vision (IR Mode)"
               >
@@ -375,7 +374,7 @@ export const CamViewport: React.FC = () => {
           {/* Fullscreen Expand */}
           <button
             onClick={() => openFullscreen(cam.id)}
-            className="p-1.5 px-2 rounded-lg bg-surface-subtle hover:bg-surface-hover text-txt-muted hover:text-txt-primary border border-border-default text-xs transition-colors cursor-pointer"
+            className="p-1.5 px-2 rounded-[8px] bg-surface/70 hover:bg-surface text-txt-muted hover:text-txt-primary border border-border-default text-xs transition-colors cursor-pointer"
             title="Fullscreen Monitor"
           >
             <i className="ti ti-maximize text-sm" />
@@ -383,8 +382,8 @@ export const CamViewport: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Viewport Box */}
-      <div className="flex-1 min-h-0 bg-ink-950 border border-border-default rounded-xl overflow-hidden flex flex-col relative shadow-xs">
+      {/* Main Viewport Box (Level 5 crisp dark media viewport) */}
+      <div className="flex-1 min-h-0 bg-ink-950 border border-border-default rounded-[10px] overflow-hidden flex flex-col relative shadow-card">
         {/* Viewport Area */}
         <div className={`flex-1 relative bg-black min-h-0 overflow-hidden ${cam.night ? 'radial-night' : ''}`}>
           {/* Frozen Frame / Uploaded Image View */}
@@ -439,22 +438,19 @@ export const CamViewport: React.FC = () => {
               <div className="w-16 h-16 rounded-2xl bg-teal-500/15 border border-teal-500/40 text-teal-300 flex items-center justify-center text-3xl mb-3 shadow-[0_0_24px_rgba(20,184,166,0.25)]">
                 <i className="ti ti-camera" />
               </div>
-              <h3 className="text-base md:text-lg font-bold text-white mb-1.5 font-display tracking-wide">
+              <h3 className="text-base md:text-lg font-bold text-white mb-4 font-display tracking-wide">
                 Enable Laptop Camera Feed
               </h3>
-              <p className="text-xs text-slate-300 max-w-md mb-4 leading-relaxed font-sans">
-                Activate your camera feed to test real-time knife, blade, firearm, perimeter intrusion, and loitering analytics with edge AI detection.
-              </p>
               <button
                 onClick={startWebcam}
-                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 font-bold text-xs md:text-sm flex items-center gap-2 shadow-lg shadow-teal-500/30 transition-all transform hover:scale-[1.03] active:scale-95 cursor-pointer"
+                className="px-5 py-2.5 rounded-xl brand-button text-slate-950 font-bold text-xs md:text-sm flex items-center gap-2 shadow-lg shadow-teal-500/30 transition-all transform hover:scale-[1.03] active:scale-95 cursor-pointer"
               >
                 <i className="ti ti-camera text-base" />
                 <span>Start Laptop Camera</span>
               </button>
               {webcamError && (
                 <div className="mt-3 text-[11px] text-amber-300 bg-amber-950/70 border border-amber-500/40 px-3 py-1.5 rounded-lg max-w-sm">
-                  ⚠️ {webcamError}
+                  <i className="ti ti-alert-triangle" aria-hidden="true" /> {webcamError}
                 </div>
               )}
             </div>
@@ -569,24 +565,24 @@ export const CamViewport: React.FC = () => {
         <div className="flex items-center justify-between px-4 py-2 shrink-0 bg-surface border-t border-border-default text-xs text-txt-muted">
           <div className="flex items-center gap-5">
             <span className="flex items-center gap-1.5">
-              <i className="ti ti-users text-sm text-[#0b8d8b]" />
+              <i className="ti ti-users text-sm text-primary" />
               <strong className="text-txt-primary font-mono">{personCount !== null ? personCount : '--'}</strong>
               <span>persons</span>
             </span>
             <span className="flex items-center gap-1.5">
-              <i className="ti ti-car text-sm text-[#5277d7]" />
+              <i className="ti ti-car text-sm text-info" />
               <strong className="text-txt-primary font-mono">{vehicleCount !== null ? vehicleCount : '--'}</strong>
               <span>vehicles</span>
             </span>
             <span className="flex items-center gap-1.5">
-              <i className="ti ti-gauge text-sm text-[#c77a21]" />
+              <i className="ti ti-gauge text-sm text-status-warning" />
               <strong className="text-txt-primary font-mono">{currentFps}</strong>
               <span>fps</span>
             </span>
           </div>
 
           <div className="flex items-center gap-1.5 text-[11px] text-txt-muted truncate">
-            <i className="ti ti-map-pin text-[#0b8d8b]" />
+            <i className="ti ti-map-pin text-primary" />
             <span className="truncate">{cam.location}</span>
           </div>
         </div>

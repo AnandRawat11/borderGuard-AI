@@ -10,7 +10,6 @@ import {
   computeTelemetryFreshness,
   TELEMETRY_STALE_THRESHOLD_MS
 } from '../utils/camera';
-import { matchDetectedPersons, enrollReferencePhoto } from '../services/faceMatcher';
 
 export const TYPE_META: Record<string, TypeMeta> = {
   intrusion: { label: 'Virtual Fence Intrusion', icon: 'ti-fence', cls: 'text-red bg-red-d border-red/30', sev: 'high' },
@@ -129,6 +128,7 @@ interface AppContextType {
   toggleCamOnline: (id: string) => void;
   toggleCamNight: (id: string) => void;
   login: (username: string, password: string) => Promise<void>;
+  register: (username: string, password: string, email?: string) => Promise<void>;
   logout: () => void;
   switchRoleDemo: (role: 'operator' | 'supervisor' | 'admin') => Promise<void>;
   startWebcam: () => Promise<void>;
@@ -169,11 +169,10 @@ export const DEMO_MODE = String((import.meta as any).env?.VITE_DEMO_MODE || '').
 const getInitialPage = (): PageId => {
   if (typeof window !== 'undefined') {
     const path = window.location.pathname.replace(/^\//, '').toLowerCase();
-    const validPages: PageId[] = ['dashboard', 'monitor', 'camgrid', 'alerts', 'analytics', 'models', 'cam-config', 'watchlist', 'features', 'contact', 'privacy', 'terms'];
+    const validPages: PageId[] = ['dashboard', 'monitor', 'camgrid', 'alerts', 'vault', 'analytics', 'models', 'cam-config', 'watchlist', 'features', 'contact', 'privacy', 'terms', 'ai-investigation', 'ai-briefing', 'dashboard-settings'];
     if (validPages.includes(path as PageId)) return path as PageId;
     if (!path || path === 'index.html') return 'dashboard';
     if (path === 'overview') return 'dashboard';
-    if (path === 'vault') return 'alerts';
     if (path === 'timeline') return 'analytics';
     if (path === 'cameras') return 'camgrid';
   }
@@ -192,14 +191,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [theme, setThemeState] = useState<'light' | 'dark'>(() => {
     try {
       const saved = localStorage.getItem('ibvap-theme');
-      if (saved === 'light' || saved === 'dark') return saved;
-      if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        return 'dark';
-      }
+      if (saved === 'dark') return 'dark';
     } catch {
       // Ignore storage access errors
     }
-    return 'light'; // Light mode is default per design specification
+    return 'light'; // Porcelain light mode is default per Spatial Glass specification
   });
 
   // Listen to browser back/forward buttons
@@ -336,11 +332,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (res && Array.isArray(res.entries)) {
         setWatchlistEntries(res.entries);
         watchlistEntriesRef.current = res.entries;
-        res.entries
-          .filter(e => e.active && e.photoUrl)
-          .forEach(e => {
-            void enrollReferencePhoto(e.id, e.name, e.photoUrl!);
-          });
       }
     } catch {
       // ignore
@@ -852,18 +843,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           let matchedWatchlistSubject: { name: string; score: number } | null = null;
 
           // 1. Gather active watchlist references and person candidates
-          const activeRefs = watchlistEntriesRef.current.filter(e => e.active);
-          const personCandidates: Array<{ bbox: [number, number, number, number]; index: number; score: number }> = [];
-
-          predictions.forEach((p, idx) => {
-            if (p.class === 'person' && p.score >= 0.30) {
-              personCandidates.push({ bbox: p.bbox as [number, number, number, number], index: idx, score: p.score });
-            }
-          });
-
-          // 2. Disambiguate detected persons using visual feature matching
-          const matchResults = matchDetectedPersons(offscreenCanvas, personCandidates, activeRefs);
-
           // Temporal weapon history pruning (Feature 3: 2.0s rolling window)
           const nowMs = Date.now();
           weaponHistoryRef.current = weaponHistoryRef.current.filter(
@@ -891,19 +870,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const wPct = (bw / 480) * 100;
             const hPct = (bh / 270) * 100;
 
-            let isWatchlistMatched = false;
-            let matchedName: string | null = null;
-            let matchScore = p.score;
-
             if (isPerson) {
               detectedPerson = { left: leftPct, top: topPct, w: wPct, h: hPct, score: p.score };
-              const matchResult = matchResults.get(idx);
-              if (matchResult && matchResult.isMatch && matchResult.matchedName) {
-                isWatchlistMatched = true;
-                matchedName = matchResult.matchedName;
-                matchScore = matchResult.score;
-                matchedWatchlistSubject = { name: matchedName, score: matchScore };
-              }
             }
 
             if (isCandidateWeapon) {
@@ -957,9 +925,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const isVerifiedWeapon = supportingWeaponHits.length >= 2 || weaponHistoryRef.current.some(w => w.score >= 0.40);
 
             let label = '';
-            if (isWatchlistMatched && matchedName) {
-              label = `[WATCHLIST MATCH] ${matchedName.toUpperCase()} ${(p.score).toFixed(2)}`;
-            } else if (isPerson) {
+            if (isPerson) {
               label = `PERSON ${personTrackId} ${(p.score).toFixed(2)}`;
             } else if (isCandidateWeapon) {
               if (isVerifiedWeapon) {
@@ -977,9 +943,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               w: Math.min(100 - leftPct, wPct),
               h: Math.min(100 - topPct, hPct),
               label,
-              watch: isCandidateWeapon || isWatchlistMatched,
+              watch: isCandidateWeapon,
               score: p.score,
-              class: isWatchlistMatched ? 'watchlist' : (isCandidateWeapon ? 'weapon' : (isPerson ? 'person' : p.class))
+              class: isCandidateWeapon ? 'weapon' : (isPerson ? 'person' : p.class)
             });
           }
 
@@ -1016,34 +982,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 activePersonTrackId = trk.trackId;
               }
             });
-          }
-
-          // 0. Watchlist POI Detection (Matches enrolled reference photos)
-          if (matchedWatchlistSubject && armed) {
-            const nowTime = Date.now();
-            if (!watchlistLatchedRef.current && (nowTime - lastWatchlistRef.current > ALERT_COOLDOWN_MS)) {
-              watchlistLatchedRef.current = true;
-              lastWatchlistRef.current = nowTime;
-              const snap = captureFrameWithBoxes(sourceEl, boxes, osdMeta);
-              const newAlert = mkAlert(
-                'watchlist',
-                detectionCam.id,
-                0,
-                `WATCHLIST POI IDENTIFIED: Match with enrolled reference "${matchedWatchlistSubject.name}" on ${detectionCam.name}`,
-                false,
-                snap,
-                Math.round(matchedWatchlistSubject.score * 100),
-                'detector',
-                detectionCam,
-                activePersonTrackId || '#101',
-                'verified_ai',
-                1
-              );
-              newAlert.sev = 'high';
-              addAlert(newAlert);
-            }
-          } else if (!matchedWatchlistSubject) {
-            watchlistLatchedRef.current = false;
           }
 
           // 1. Feature 3: Temporal Weapon Verification (Requires >= 3 detections with conf >= 0.60 in 2.0s window)
@@ -1695,6 +1633,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const register = async (username: string, password: string, email?: string) => {
+    try {
+      const auth = await api.register(username, password, email);
+      setCurrentUser(auth);
+      localStorage.setItem('ibvap_auth', JSON.stringify(auth));
+      showNotice('success', `Account ${auth.username} created and signed in.`);
+    } catch (err: any) {
+      showNotice('error', err?.message || 'Account creation failed.');
+      throw err;
+    }
+  };
+
   const logout = () => {
     setCurrentUser(null);
     localStorage.removeItem('ibvap_auth');
@@ -1782,6 +1732,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toggleCamOnline,
         toggleCamNight,
         login,
+        register,
         logout,
         switchRoleDemo,
         startWebcam,

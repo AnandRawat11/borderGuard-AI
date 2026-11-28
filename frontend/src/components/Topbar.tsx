@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
+import { SpatialOverlay } from './Spatial/MotionPrimitives';
 
 export const Topbar: React.FC = () => {
   const {
@@ -20,15 +21,19 @@ export const Topbar: React.FC = () => {
     sidebarCollapsed,
     toggleSidebar,
     login,
+    register,
     logout
   } = useApp();
 
   const [timeStr, setTimeStr] = useState<string>('--:--:--');
   const [notificationsOpen, setNotificationsOpen] = useState<boolean>(false);
   const [profileOpen, setProfileOpen] = useState<boolean>(false);
+  const [authMode, setAuthMode] = useState<'signin' | 'register'>('signin');
   const [loginUsername, setLoginUsername] = useState<string>('');
+  const [loginEmail, setLoginEmail] = useState<string>('');
   const [loginPassword, setLoginPassword] = useState<string>('');
   const [loginBusy, setLoginBusy] = useState<boolean>(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const notifRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -62,26 +67,44 @@ export const Topbar: React.FC = () => {
     event.preventDefault();
     if (!loginUsername.trim() || !loginPassword) return;
     setLoginBusy(true);
+    setAuthError(null);
     try {
       await login(loginUsername.trim(), loginPassword);
       setLoginPassword('');
+      setAuthError(null);
       setProfileOpen(false);
-    } catch {
-      // AppContext presents the server error through the shared notice toast.
+    } catch (err: any) {
+      setAuthError(err?.message || 'Invalid credentials');
+    } finally {
+      setLoginBusy(false);
+    }
+  };
+
+  const handleRegister = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!loginUsername.trim() || !loginPassword) return;
+    setLoginBusy(true);
+    setAuthError(null);
+    try {
+      await register(loginUsername.trim(), loginPassword, loginEmail.trim() || undefined);
+      setLoginPassword('');
+      setLoginEmail('');
+      setAuthError(null);
+      setAuthMode('signin');
+      setProfileOpen(false);
+    } catch (err: any) {
+      setAuthError(err?.message || 'Registration failed');
     } finally {
       setLoginBusy(false);
     }
   };
 
   return (
-    <header className="h-[72px] shrink-0 bg-gradient-to-r from-[#0b1e34] via-[#123256] to-[#0e4d5e] text-white flex items-center px-4 md:px-7 gap-5 select-none z-30 relative shadow-[0_5px_20px_rgba(16,37,62,0.18)]">
-      {/* 2px Rainbow Glow Accent Line on Bottom */}
-      <div className="absolute left-0 right-0 bottom-0 h-[2px] bg-gradient-to-r from-[#2fd6c0] via-[#5b8def] via-[#9a7ae6] to-[#f0a640]" />
-
+    <header className="h-[68px] shrink-0 topbar spatial-glass-nav text-txt-primary flex items-center px-2 sm:px-4 lg:px-7 gap-1 sm:gap-2 lg:gap-5 select-none z-30 relative border-b border-border-default">
       {/* Mobile Drawer Button */}
       <button
         onClick={toggleMobileMenu}
-        className="md:hidden p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+        className="md:hidden p-1.5 rounded-[10px] text-txt-secondary hover:text-primary hover:bg-primary-surface/70 transition-colors cursor-pointer"
         aria-label="Open mobile navigation"
       >
         <i className="ti ti-menu-2 text-xl" />
@@ -90,7 +113,7 @@ export const Topbar: React.FC = () => {
       {/* Desktop Sidebar Rail Collapse Toggle */}
       <button
         onClick={toggleSidebar}
-        className="hidden md:flex p-1.5 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
+        className="hidden md:flex p-1.5 rounded-[10px] text-txt-secondary hover:text-primary hover:bg-primary-surface/70 transition-colors cursor-pointer shrink-0"
         title={sidebarCollapsed ? "Expand sidebar rail" : "Collapse sidebar rail"}
         aria-label={sidebarCollapsed ? "Expand sidebar rail" : "Collapse sidebar rail"}
       >
@@ -100,16 +123,16 @@ export const Topbar: React.FC = () => {
       {/* Brand Logo & Name */}
       <div
         onClick={() => goToPage('dashboard')}
-        className="flex items-center gap-2.5 min-w-[210px] cursor-pointer"
+        className="flex items-center gap-1.5 sm:gap-2.5 min-w-0 lg:min-w-[210px] cursor-pointer"
       >
-        <div className="w-[39px] h-[39px] rounded-xl flex items-center justify-center font-black text-sm text-[#092b3d] bg-gradient-to-br from-[#2fe0c8] via-[#5b9bff] to-[#9a7ae6] shadow-[0_5px_14px_rgba(41,173,166,0.38)] shrink-0">
+        <div className="w-[38px] h-[38px] rounded-[10px] flex items-center justify-center font-black text-sm text-primary-text bg-primary brand-mark font-display shrink-0">
           IB
         </div>
-        <div>
-          <div className="font-extrabold text-[15px] tracking-wider leading-none text-white font-display">
+        <div className="min-w-0">
+          <div className="font-extrabold text-[15px] tracking-wider leading-none text-txt-primary font-display">
             IBVAP
           </div>
-          <div className="text-[9px] tracking-[0.13em] uppercase text-[#9fb3c5] font-semibold mt-1 leading-none">
+          <div className="brand-caption text-[9px] tracking-[0.11em] uppercase text-txt-muted font-semibold mt-1 leading-none">
             INTELLIGENT BORDER VIDEO ANALYTICS
           </div>
         </div>
@@ -119,23 +142,23 @@ export const Topbar: React.FC = () => {
       <div className="flex-1" />
 
       {/* Right Controls */}
-      <div className="flex items-center gap-3 shrink-0">
+      <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2.5 shrink-0">
         {/* Live Clock */}
-        <div className="hidden xl:block font-mono text-xs font-semibold text-slate-200 bg-white/10 border border-white/15 px-2.5 py-1 rounded-lg tabular-nums">
-          {timeStr} <span className="text-[10px] text-cyan-200/70">IST</span>
+        <div className="hidden xl:block font-mono text-xs font-semibold text-txt-secondary bg-surface/65 border border-border-default px-2.5 py-1 rounded-[10px] tabular-nums">
+          {timeStr} <span className="text-[10px] text-txt-muted">IST</span>
         </div>
 
         {/* Armed / Standby Toggle */}
         <button
           onClick={toggleArmed}
           aria-label={armed ? "Disarm system" : "Arm system"}
-          className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all border ${
+          className={`flex items-center gap-1.5 px-3 py-1 rounded-[10px] text-xs font-bold transition-all border ${
             armed
-              ? 'bg-[#0b8d8b]/30 text-cyan-200 border-cyan-400/40 shadow-xs'
-              : 'bg-amber-500/20 text-amber-300 border-amber-400/40'
+              ? 'bg-status-success-surface/90 text-status-success border-status-success-border'
+              : 'bg-status-warning-surface/90 text-status-warning border-status-warning-border'
           }`}
         >
-          <span className={`w-1.5 h-1.5 rounded-full ${armed ? 'bg-cyan-300 animate-pulse' : 'bg-amber-400'}`} />
+          <span className={`w-1.5 h-1.5 rounded-full ${armed ? 'bg-online' : 'bg-amber-400'}`} />
           <span>{armed ? 'Armed' : 'Standby'}</span>
         </button>
 
@@ -143,10 +166,10 @@ export const Topbar: React.FC = () => {
         {demoMode && (
           <button
             onClick={triggerWeaponDemo}
-            className="hidden md:flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-400/30 text-xs font-bold transition-all shadow-xs cursor-pointer"
+            className="hidden md:flex items-center gap-1 px-2.5 py-1 rounded-[10px] bg-status-danger-surface/90 hover:bg-status-danger-surface text-status-danger border border-status-danger-border text-xs font-bold transition-all cursor-pointer"
             title="Simulate immediate boundary weapon breach (or press 'K')"
           >
-            <i className="ti ti-shield-alert text-sm" />
+            <i className="ti ti-shield-exclamation text-sm" />
             <span>Demo [K]</span>
           </button>
         )}
@@ -154,8 +177,8 @@ export const Topbar: React.FC = () => {
         {/* Sound Toggle */}
         <button
           onClick={toggleSound}
-          className={`p-2 rounded-lg hover:bg-white/10 transition-colors cursor-pointer ${
-            soundEnabled ? 'text-teal-400' : 'text-slate-400'
+          className={`p-2 rounded-[10px] hover:bg-primary-surface/70 transition-colors cursor-pointer ${
+            soundEnabled ? 'text-primary' : 'text-txt-muted'
           }`}
           title={soundEnabled ? 'Sound Enabled' : 'Sound Muted'}
           aria-label="Toggle Sound Alerts"
@@ -167,17 +190,17 @@ export const Topbar: React.FC = () => {
         <div ref={notifRef} className="relative">
           <button
             onClick={() => setNotificationsOpen(prev => !prev)}
-            className="relative p-2 rounded-lg hover:bg-white/10 text-slate-200 hover:text-white transition-colors"
+            className="relative p-2 rounded-[10px] hover:bg-primary-surface/70 text-txt-secondary hover:text-primary transition-colors"
             aria-label={`Notifications: ${unreviewedAlerts.length} unread`}
           >
             <i className="ti ti-bell text-base" />
             {criticalCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-[#0b1e34]" />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-surface" />
             )}
           </button>
 
           {notificationsOpen && (
-            <div className="absolute right-0 top-full mt-2 w-80 bg-surface border border-border-default rounded-xl shadow-xl py-2 z-50 text-xs text-txt-primary">
+            <SpatialOverlay className="ui-popover spatial-glass-overlay absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-6.5rem)] py-2 z-50 text-xs text-txt-primary">
               <div className="flex items-center justify-between px-4 py-2 border-b border-border-subtle">
                 <span className="font-bold text-txt-primary">Threat Notifications</span>
                 <span className="text-[10px] text-txt-muted font-mono">{unreviewedAlerts.length} Unresolved</span>
@@ -186,11 +209,11 @@ export const Topbar: React.FC = () => {
               <div className="max-h-72 overflow-y-auto divide-y divide-border-subtle">
                 {unreviewedAlerts.length === 0 ? (
                   <div className="p-4 text-center text-txt-muted text-xs">
-                    All perimeters secure. Zero unreviewed breaches.
+                    No unresolved alerts.
                   </div>
                 ) : (
                   unreviewedAlerts.slice(0, 5).map(alert => (
-                    <div key={alert.id} className="p-3 hover:bg-surface-subtle transition-colors flex flex-col gap-1">
+                    <div key={alert.id} className="p-3 hover:bg-primary-surface/45 transition-colors flex flex-col gap-1">
                       <div className="flex items-center justify-between">
                         <span className="font-bold font-mono text-txt-primary">{alert.id}</span>
                         <span className="text-[10px] text-txt-muted font-mono">
@@ -226,14 +249,14 @@ export const Topbar: React.FC = () => {
                   View All Alerts
                 </button>
               </div>
-            </div>
+            </SpatialOverlay>
           )}
         </div>
 
         {/* Theme Toggle Button */}
         <button
           onClick={toggleTheme}
-          className="p-2 rounded-lg hover:bg-white/10 text-slate-200 hover:text-white transition-colors"
+          className="p-2 rounded-[10px] hover:bg-primary-surface/70 text-txt-secondary hover:text-primary transition-colors"
           title={theme === 'light' ? 'Switch to Dark Mode (Charcoal)' : 'Switch to Light Mode'}
           aria-label={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
         >
@@ -244,14 +267,14 @@ export const Topbar: React.FC = () => {
         <div ref={profileRef} className="relative">
           <button
             onClick={() => setProfileOpen(prev => !prev)}
-            className="w-[34px] h-[34px] rounded-full bg-[#d9eaf5] text-[#163b56] flex items-center justify-center font-extrabold text-xs shadow-inner cursor-pointer hover:ring-2 hover:ring-cyan-300 transition-all"
+            className="w-[34px] h-[34px] rounded-full bg-primary-surface/90 border border-primary-border text-primary flex items-center justify-center font-extrabold text-xs cursor-pointer hover:ring-2 hover:ring-primary-border transition-all"
             aria-label="Officer Profile & Role Menu"
           >
             {currentUser?.username?.[0]?.toUpperCase() || 'OP'}
           </button>
 
           {profileOpen && (
-            <div className="absolute right-0 top-full mt-2 w-64 bg-surface border border-border-default rounded-xl shadow-xl py-1.5 z-50 text-xs text-txt-primary">
+            <SpatialOverlay className="ui-popover spatial-glass-overlay absolute right-0 top-full mt-2 w-64 py-1.5 z-50 text-xs text-txt-primary">
               {currentUser ? (
                 <>
                   <div className="px-3 py-2 border-b border-border-subtle">
@@ -271,12 +294,12 @@ export const Topbar: React.FC = () => {
                             await switchRoleDemo(role);
                             setProfileOpen(false);
                           }}
-                          className={`w-full px-3 py-1.5 text-left capitalize flex items-center justify-between hover:bg-surface-subtle transition-colors ${
+                          className={`w-full px-3 py-1.5 text-left capitalize flex items-center justify-between hover:bg-primary-surface/45 transition-colors ${
                             currentUser.role === role ? 'font-bold text-primary' : 'text-txt-secondary'
                           }`}
                         >
                           <span>{role}</span>
-                          {currentUser.role === role && <span className="text-primary font-bold">✓</span>}
+                          {currentUser.role === role && <span className="text-primary font-bold"><i className="ti ti-check" aria-hidden="true" /></span>}
                         </button>
                       ))}
                     </>
@@ -291,45 +314,122 @@ export const Topbar: React.FC = () => {
                       logout();
                       setProfileOpen(false);
                     }}
-                    className="w-full border-t border-border-subtle mt-1 px-3 py-2 text-left font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                    className="w-full border-t border-border-subtle mt-1 px-3 py-2 text-left font-semibold text-rose-600 hover:bg-rose-50/70 dark:hover:bg-rose-950/30"
                   >
                     Sign out
                   </button>
                 </>
-              ) : (
+              ) : authMode === 'signin' ? (
                 <form onSubmit={handleLogin} className="p-3 flex flex-col gap-2.5">
-                  <div>
+                  <div className="flex items-center justify-between gap-2">
                     <div className="font-bold text-txt-primary">Sign in to IBVAP</div>
-                    <div className="text-[10px] text-txt-muted mt-0.5">Use an assigned account to load protected features.</div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthMode('register');
+                        setAuthError(null);
+                      }}
+                      className="text-[11px] font-semibold text-primary hover:underline"
+                    >
+                      Create account
+                    </button>
                   </div>
                   <input
                     value={loginUsername}
-                    onChange={event => setLoginUsername(event.target.value)}
+                    onChange={event => {
+                      setLoginUsername(event.target.value);
+                      if (authError) setAuthError(null);
+                    }}
                     autoComplete="username"
-                    placeholder="Username"
-                    className="h-9 rounded-lg border border-border-default bg-surface-subtle px-2.5 text-xs text-txt-primary outline-none focus:ring-2 focus:ring-cyan-400"
+                    placeholder="Username or email"
+                    className="h-9 rounded-[10px] border border-border-default bg-surface/85 px-2.5 text-xs text-txt-primary outline-none focus:ring-2 focus:ring-primary-border"
                   />
                   <input
                     value={loginPassword}
-                    onChange={event => setLoginPassword(event.target.value)}
+                    onChange={event => {
+                      setLoginPassword(event.target.value);
+                      if (authError) setAuthError(null);
+                    }}
                     type="password"
                     autoComplete="current-password"
                     placeholder="Password"
-                    className="h-9 rounded-lg border border-border-default bg-surface-subtle px-2.5 text-xs text-txt-primary outline-none focus:ring-2 focus:ring-cyan-400"
+                    className="h-9 rounded-[10px] border border-border-default bg-surface/85 px-2.5 text-xs text-txt-primary outline-none focus:ring-2 focus:ring-primary-border"
                   />
+                  {authError && (
+                    <div role="alert" className="text-[11px] font-medium text-rose-600 bg-rose-50/80 dark:bg-rose-950/30 border border-rose-200/70 rounded-[8px] px-2.5 py-1.5">
+                      {authError}
+                    </div>
+                  )}
                   <button
                     type="submit"
                     disabled={loginBusy || !loginUsername.trim() || !loginPassword}
-                    className="h-9 rounded-lg bg-gradient-to-r from-cyan-700 to-teal-600 text-white font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="h-9 rounded-[10px] brand-button text-white font-bold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {loginBusy ? 'Signing in…' : 'Sign in'}
                   </button>
-                  <div className="text-[10px] leading-4 text-txt-muted">
-                    Local development accounts are created by the backend runner when demo users are enabled.
+                </form>
+              ) : (
+                <form onSubmit={handleRegister} className="p-3 flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-bold text-txt-primary">Create account</div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthMode('signin');
+                        setAuthError(null);
+                      }}
+                      className="text-[11px] font-semibold text-primary hover:underline"
+                    >
+                      Sign in
+                    </button>
                   </div>
+                  <input
+                    value={loginUsername}
+                    onChange={event => {
+                      setLoginUsername(event.target.value);
+                      if (authError) setAuthError(null);
+                    }}
+                    autoComplete="username"
+                    placeholder="Username"
+                    className="h-9 rounded-[10px] border border-border-default bg-surface/85 px-2.5 text-xs text-txt-primary outline-none focus:ring-2 focus:ring-primary-border"
+                  />
+                  <input
+                    value={loginEmail}
+                    onChange={event => {
+                      setLoginEmail(event.target.value);
+                      if (authError) setAuthError(null);
+                    }}
+                    type="email"
+                    autoComplete="email"
+                    placeholder="Email (optional)"
+                    className="h-9 rounded-[10px] border border-border-default bg-surface/85 px-2.5 text-xs text-txt-primary outline-none focus:ring-2 focus:ring-primary-border"
+                  />
+                  <input
+                    value={loginPassword}
+                    onChange={event => {
+                      setLoginPassword(event.target.value);
+                      if (authError) setAuthError(null);
+                    }}
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder="Password (min 6 chars)"
+                    className="h-9 rounded-[10px] border border-border-default bg-surface/85 px-2.5 text-xs text-txt-primary outline-none focus:ring-2 focus:ring-primary-border"
+                  />
+                  {authError && (
+                    <div role="alert" className="text-[11px] font-medium text-rose-600 bg-rose-50/80 dark:bg-rose-950/30 border border-rose-200/70 rounded-[8px] px-2.5 py-1.5">
+                      {authError}
+                    </div>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={loginBusy || !loginUsername.trim() || loginPassword.length < 6}
+                    className="h-9 rounded-[10px] brand-button text-white font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loginBusy ? 'Creating account…' : 'Create account'}
+                  </button>
                 </form>
               )}
-            </div>
+            </SpatialOverlay>
           )}
         </div>
 

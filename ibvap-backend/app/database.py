@@ -1,14 +1,56 @@
 import os
 from datetime import datetime, timezone
+from pathlib import Path
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, event, inspect as sqlalchemy_inspect, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
+_BACKEND_ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
+if _BACKEND_ENV_PATH.exists():
+    load_dotenv(_BACKEND_ENV_PATH, override=False)
+
+
+def _normalize_database_url(raw_url: str) -> str:
+    url = (raw_url or "").strip()
+    if not url:
+        return "sqlite:///./ibvap.db"
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://"):]
+    if url.startswith("postgresql") and "://" in url:
+        scheme, rest = url.split("://", 1)
+        if "/" in rest:
+            authority, tail = rest.split("/", 1)
+            path_part = "/" + tail
+        else:
+            authority, path_part = rest, ""
+        if "@" in authority:
+            userinfo, hostport = authority.rsplit("@", 1)
+            if ":" in userinfo:
+                user, password = userinfo.split(":", 1)
+                if "@" in password:
+                    password = password.replace("@", "%40")
+                userinfo = f"{user}:{password}"
+            authority = f"{userinfo}@{hostport}"
+        if (".supabase.co" in authority.lower() or ".pooler.supabase.com" in authority.lower()) and "sslmode=" not in path_part.lower():
+            sep = "&" if "?" in path_part else "?"
+            path_part = f"{path_part}{sep}sslmode=require"
+        url = f"{scheme}://{authority}{path_part}"
+    return url
+
+
 # Prototype uses SQLite for zero-setup local demo. To move to Postgres:
 # set DATABASE_URL="postgresql://user:pass@host:5432/ibvap"
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./ibvap.db")
+DATABASE_URL = _normalize_database_url(os.getenv("DATABASE_URL", "sqlite:///./ibvap.db"))
 
-connect_args = {"check_same_thread": False, "timeout": 15} if DATABASE_URL.startswith("sqlite") else {}
-engine = create_engine(DATABASE_URL, connect_args=connect_args)
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False, "timeout": 15})
+else:
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"connect_timeout": 10},
+        pool_pre_ping=True,
+        pool_recycle=300,
+    )
 
 if DATABASE_URL.startswith("sqlite"):
     @event.listens_for(engine, "connect")
@@ -51,7 +93,16 @@ def ensure_schema_compatibility() -> None:
     """
     with engine.begin() as connection:
         inspector = sqlalchemy_inspect(connection)
-        if "alerts" not in inspector.get_table_names():
+        table_names = set(inspector.get_table_names())
+        timestamp_type = "TIMESTAMP" if connection.dialect.name == "postgresql" else "DATETIME"
+
+        if "users" in table_names:
+            user_columns = {column["name"] for column in inspector.get_columns("users")}
+            if "email" not in user_columns:
+                connection.execute(text("ALTER TABLE users ADD COLUMN email VARCHAR(255)"))
+                connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email ON users (email)"))
+
+        if "alerts" not in table_names:
             return
 
         alert_columns = {column["name"] for column in inspector.get_columns("alerts")}
@@ -61,8 +112,8 @@ def ensure_schema_compatibility() -> None:
         for col_name, col_sql in [
             ("verification_status", "VARCHAR(32) DEFAULT 'verified_ai'"),
             ("supporting_detections", "INTEGER DEFAULT 1"),
-            ("first_detected_at", "DATETIME"),
-            ("last_detected_at", "DATETIME"),
+            ("first_detected_at", timestamp_type),
+            ("last_detected_at", timestamp_type),
             ("secondary_class", "VARCHAR(32)"),
             ("secondary_confidence", "FLOAT"),
         ]:

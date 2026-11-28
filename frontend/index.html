@@ -5,20 +5,14 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="IBVAP command center for monitoring camera feeds, reviewing security alerts, and inspecting forensic evidence." />
-    <meta name="theme-color" content="#060a0f" />
+    <meta name="theme-color" content="#FAFAFC" />
     <title>IBVAP | Intelligent Border Video Analytics Platform</title>
-    <!-- Google Fonts: Plus Jakarta Sans, Inter, Space Grotesk, JetBrains Mono -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-    <!-- Tabler Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+    <link rel="stylesheet" href="/fonts/fonts.css" />
     <script>
       (function() {
         try {
           var saved = localStorage.getItem('ibvap-theme');
-          var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-          var theme = (saved === 'dark' || (!saved && prefersDark)) ? 'dark' : 'light';
+          var theme = saved === 'dark' ? 'dark' : 'light';
           document.documentElement.setAttribute('data-theme', theme);
           if (theme === 'dark') document.documentElement.classList.add('dark');
           else document.documentElement.classList.remove('dark');
@@ -26,7 +20,7 @@
       })();
     </script>
   </head>
-  <body class="bg-canvas text-primary overflow-hidden font-sans antialiased transition-colors duration-150">
+  <body class="bg-canvas text-txt-primary overflow-hidden font-sans antialiased transition-colors duration-200">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

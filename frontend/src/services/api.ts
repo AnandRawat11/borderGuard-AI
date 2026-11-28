@@ -342,6 +342,25 @@ export const api = {
     };
   },
 
+  async register(username: string, password: string, email?: string): Promise<UserAuth> {
+    const res = await fetch(`${API_BASE}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password, email: email?.trim() || undefined })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Registration failed' }));
+      throw new Error(err.detail || 'Unable to create account');
+    }
+    const data = await res.json();
+    return {
+      username: data.username,
+      role: data.role,
+      accessToken: data.accessToken,
+      siteIds: data.siteIds || data.site_ids || []
+    };
+  },
+
   normalizeReadiness(data: any, statusCode?: number): ReadinessResponse {
     return {
       ready: Boolean(data?.ready),
@@ -925,209 +944,6 @@ export const api = {
     return res.json();
   },
 
-  async anchorLedger(payload: AnchorLedgerRequest, token?: string): Promise<LedgerAnchor> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(`${API_BASE}/ledger/anchor`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        siteId: payload.siteId || 'site-alpha',
-        fromSequence: payload.fromSequence,
-        throughSequence: payload.throughSequence,
-        force: !!payload.force
-      })
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: 'Failed to create ledger anchor' }));
-      throw new Error(err.detail || 'Failed to create ledger anchor');
-    }
-    return res.json();
-  },
-
-  async getAnchors(siteId?: string, status?: string, token?: string): Promise<LedgerAnchor[]> {
-    const headers: Record<string, string> = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const params = new URLSearchParams();
-    if (siteId) params.append('site_id', siteId);
-    if (status) params.append('status', status);
-    const qs = params.toString() ? `?${params.toString()}` : '';
-    const res = await fetch(`${API_BASE}/ledger/anchors${qs}`, { headers });
-    if (!res.ok) throw new Error('Failed to fetch blockchain anchors');
-    return res.json();
-  },
-
-  async getAnchor(anchorId: string, token?: string): Promise<LedgerAnchor> {
-    const headers: Record<string, string> = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(`${API_BASE}/ledger/anchors/${anchorId}`, { headers });
-    if (!res.ok) throw new Error(`Failed to fetch anchor ${anchorId}`);
-    return res.json();
-  },
-
-  async verifyAnchor(anchorId: string, token?: string): Promise<LedgerAnchorVerifyResult> {
-    const headers: Record<string, string> = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(`${API_BASE}/ledger/anchors/${anchorId}/verify`, {
-      method: 'POST',
-      headers
-    });
-    if (!res.ok) throw new Error(`Failed to verify anchor ${anchorId}`);
-    return res.json();
-  },
-
-  async retryAnchor(anchorId: string, token?: string): Promise<LedgerAnchor> {
-    const headers: Record<string, string> = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(`${API_BASE}/ledger/anchors/${anchorId}/retry`, {
-      method: 'POST',
-      headers
-    });
-    if (!res.ok) throw new Error(`Failed to retry anchor ${anchorId}`);
-    return res.json();
-  },
-
-  async getAlertMerkleProof(alertId: string, token?: string): Promise<MerkleProof> {
-    const headers: Record<string, string> = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(`${API_BASE}/alerts/${alertId}/merkle-proof`, { headers });
-    if (!res.ok) throw new Error(`Failed to fetch Merkle proof for ${alertId}`);
-    return res.json();
-  },
-
-  async verifyMerkleProof(proof: MerkleProof, token?: string): Promise<MerkleProofVerifyResult> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(`${API_BASE}/ledger/proof/verify`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        alertId: proof.alertId,
-        leafHash: proof.leafHash,
-        siblingHashes: proof.siblingHashes,
-        positions: proof.positions,
-        rootHash: proof.rootHash,
-        schemaVersion: proof.schemaVersion || 'merkle-v1'
-      })
-    });
-    if (!res.ok) throw new Error('Failed to verify Merkle proof');
-    return res.json();
-  },
-
-  async getModelProvenance(modelVersion: string, token?: string): Promise<ModelProvenance> {
-    const headers: Record<string, string> = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(`${API_BASE}/models/${modelVersion}/provenance`, { headers });
-    if (!res.ok) throw new Error(`Failed to fetch provenance for model ${modelVersion}`);
-    return res.json();
-  },
-
-  async getAlertProvenance(alertId: string, token?: string): Promise<AlertProvenance> {
-    const headers: Record<string, string> = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(`${API_BASE}/alerts/${alertId}/provenance`, { headers });
-    if (!res.ok) throw new Error(`Failed to fetch provenance for alert ${alertId}`);
-    return res.json();
-  },
-
-  async verifyAlertProvenance(alertId: string, token?: string): Promise<AlertProvenanceVerifyResult> {
-    const headers: Record<string, string> = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(`${API_BASE}/alerts/${alertId}/provenance/verify`, {
-      method: 'POST',
-      headers
-    });
-    if (!res.ok) throw new Error(`Failed to verify provenance for alert ${alertId}`);
-    return res.json();
-  },
-
-  async getAnchorProposals(siteId?: string, status?: string, token?: string): Promise<AnchorProposal[]> {
-    const headers: Record<string, string> = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const params = new URLSearchParams();
-    if (siteId) params.append('site_id', siteId);
-    if (status) params.append('status', status);
-    const qs = params.toString() ? `?${params.toString()}` : '';
-    const res = await fetch(`${API_BASE}/ledger/anchors/proposals${qs}`, { headers });
-    if (!res.ok) throw new Error('Failed to fetch anchor proposals');
-    return res.json();
-  },
-
-  async createAnchorProposal(payload: { siteId?: string; fromSequence: number; throughSequence: number; expiresInHours?: number }, token?: string): Promise<AnchorProposal> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(`${API_BASE}/ledger/anchors/proposals`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        siteId: payload.siteId || 'site-alpha',
-        fromSequence: payload.fromSequence,
-        throughSequence: payload.throughSequence,
-        expiresInHours: payload.expiresInHours || 24
-      })
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: 'Failed to create proposal' }));
-      throw new Error(err.detail || 'Failed to create proposal');
-    }
-    return res.json();
-  },
-
-  async signAnchorProposal(proposalId: string, reason?: string, token?: string): Promise<AnchorProposal> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(`${API_BASE}/ledger/anchors/proposals/${proposalId}/sign`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ reason: reason || 'Approved cryptographic commitment' })
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: 'Failed to sign proposal' }));
-      throw new Error(err.detail || 'Failed to sign proposal');
-    }
-    return res.json();
-  },
-
-  async rejectAnchorProposal(proposalId: string, reason: string, token?: string): Promise<AnchorProposal> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(`${API_BASE}/ledger/anchors/proposals/${proposalId}/reject`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ reason })
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: 'Failed to reject proposal' }));
-      throw new Error(err.detail || 'Failed to reject proposal');
-    }
-    return res.json();
-  },
-
-  async submitAnchorProposal(proposalId: string, token?: string): Promise<AnchorProposal> {
-    const headers: Record<string, string> = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(`${API_BASE}/ledger/anchors/proposals/${proposalId}/submit`, {
-      method: 'POST',
-      headers
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: 'Failed to submit proposal' }));
-      throw new Error(err.detail || 'Failed to submit proposal');
-    }
-    return res.json();
-  },
-
-  async verifyAnchorProposal(proposalId: string, token?: string): Promise<any> {
-    const headers: Record<string, string> = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(`${API_BASE}/ledger/anchors/proposals/${proposalId}/verify`, {
-      method: 'POST',
-      headers
-    });
-    if (!res.ok) throw new Error('Failed to verify anchor proposal');
-    return res.json();
-  },
-
   async getAuditLog(token?: string): Promise<AuditLogEntry[]> {
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -1173,14 +989,6 @@ export const api = {
       const err = await res.json().catch(() => ({ detail: 'Single frame processing failed' }));
       throw new Error(err.detail || 'Single frame processing failed');
     }
-    return res.json();
-  },
-
-  async getAlertTerrain(alertId: string, token?: string): Promise<TerrainEnrichment> {
-    const headers: Record<string, string> = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(`${API_BASE}/api/alerts/${alertId}/terrain`, { headers });
-    if (!res.ok) throw new Error('Failed to fetch terrain enrichment');
     return res.json();
   },
 

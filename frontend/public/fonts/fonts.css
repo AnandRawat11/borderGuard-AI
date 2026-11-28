@@ -1,0 +1,161 @@
+@font-face {
+  font-family: 'Inter';
+  src: url('./inter-latin.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Manrope';
+  src: url('./manrope-latin.woff2') format('woff2');
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('./jetbrains-mono-latin.woff2') format('woff2');
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Tabler 3.19.0. The local font includes the outline icons referenced by this UI. */
+@font-face {
+  font-family: 'tabler-icons';
+  src: url('./tabler-icons.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+
+.ti {
+  font-family: 'tabler-icons' !important;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 1;
+  speak: never;
+  -webkit-font-smoothing: antialiased;
+}
+
+.ti-activity::before { content: "\ed23"; }
+.ti-adjustments::before { content: "\ea03"; }
+.ti-adjustments-horizontal::before { content: "\ec38"; }
+.ti-alert-circle::before { content: "\ea05"; }
+.ti-alert-octagon::before { content: "\ecc6"; }
+.ti-alert-triangle::before { content: "\ea06"; }
+.ti-archive::before { content: "\ea0b"; }
+.ti-arrow-badge-up::before { content: "\f60e"; }
+.ti-arrow-up-circle::before { content: "\ea20"; }
+.ti-arrow-up-right::before { content: "\ea24"; }
+.ti-bell::before { content: "\ea35"; }
+.ti-bell-ringing::before { content: "\ed07"; }
+.ti-binary::before { content: "\ee08"; }
+.ti-binary-tree::before { content: "\f5d4"; }
+.ti-bolt::before { content: "\ea38"; }
+.ti-bookmark::before { content: "\ea3a"; }
+.ti-brain::before { content: "\f59f"; }
+.ti-brand-google::before { content: "\ec1f"; }
+.ti-camera::before { content: "\ea54"; }
+.ti-car::before { content: "\ebbb"; }
+.ti-chart-bar::before { content: "\ea59"; }
+.ti-check::before { content: "\ea5e"; }
+.ti-chevron-down::before { content: "\ea5f"; }
+.ti-chevron-left::before { content: "\ea60"; }
+.ti-chevron-right::before { content: "\ea61"; }
+.ti-chevron-up::before { content: "\ea62"; }
+.ti-chevrons-up::before { content: "\ea66"; }
+.ti-circle-check::before { content: "\ea67"; }
+.ti-clipboard-list::before { content: "\ea6d"; }
+.ti-clock::before { content: "\ea70"; }
+.ti-clock-hour-4::before { content: "\f319"; }
+.ti-clock-pause::before { content: "\f548"; }
+.ti-compass::before { content: "\ea79"; }
+.ti-copy::before { content: "\ea7a"; }
+.ti-cpu::before { content: "\ef8e"; }
+.ti-crosshair::before { content: "\ec3e"; }
+.ti-database::before { content: "\ea88"; }
+.ti-device-cctv::before { content: "\ee74"; }
+.ti-device-desktop::before { content: "\ea89"; }
+.ti-device-floppy::before { content: "\eb62"; }
+.ti-download::before { content: "\ea96"; }
+.ti-edit::before { content: "\ea98"; }
+.ti-external-link::before { content: "\ea99"; }
+.ti-eye::before { content: "\ea9a"; }
+.ti-eye-off::before { content: "\ecf0"; }
+.ti-fence::before { content: "\ef2a"; }
+.ti-file-report::before { content: "\eded"; }
+.ti-fingerprint::before { content: "\ebd1"; }
+.ti-flag::before { content: "\eaa6"; }
+.ti-flame::before { content: "\ec2c"; }
+.ti-folder::before { content: "\eaad"; }
+.ti-gauge::before { content: "\eab1"; }
+.ti-help-circle::before { content: "\f91d"; }
+.ti-history::before { content: "\ebea"; }
+.ti-inbox::before { content: "\eac4"; }
+.ti-info-circle::before { content: "\eac5"; }
+.ti-key::before { content: "\eac7"; }
+.ti-layout-dashboard::before { content: "\f02c"; }
+.ti-layout-distribute-vertical::before { content: "\ead6"; }
+.ti-layout-grid::before { content: "\edba"; }
+.ti-layout-rows::before { content: "\ead8"; }
+.ti-layout-sidebar-left-collapse::before { content: "\f004"; }
+.ti-layout-sidebar-left-expand::before { content: "\f005"; }
+.ti-license::before { content: "\ebc0"; }
+.ti-link::before { content: "\eade"; }
+.ti-list-check::before { content: "\eb6a"; }
+.ti-list-details::before { content: "\ef40"; }
+.ti-loader::before { content: "\eca3"; }
+.ti-loader-2::before { content: "\f226"; }
+.ti-lock::before { content: "\eae2"; }
+.ti-mail::before { content: "\eae5"; }
+.ti-map-pin::before { content: "\eae8"; }
+.ti-maximize::before { content: "\eaea"; }
+.ti-menu-2::before { content: "\ec42"; }
+.ti-moon::before { content: "\eaf8"; }
+.ti-moon-stars::before { content: "\ece7"; }
+.ti-mountain::before { content: "\ef97"; }
+.ti-movie::before { content: "\eafa"; }
+.ti-network::before { content: "\f09f"; }
+.ti-notes::before { content: "\eb6e"; }
+.ti-phone::before { content: "\eb09"; }
+.ti-photo-scan::before { content: "\fca8"; }
+.ti-player-play::before { content: "\ed46"; }
+.ti-player-stop::before { content: "\ed4a"; }
+.ti-plus::before { content: "\eb0b"; }
+.ti-point-filled::before { content: "\f698"; }
+.ti-question-mark::before { content: "\ec9d"; }
+.ti-radio::before { content: "\ef2d"; }
+.ti-refresh::before { content: "\eb13"; }
+.ti-robot::before { content: "\f00b"; }
+.ti-rotate::before { content: "\eb16"; }
+.ti-route::before { content: "\eb17"; }
+.ti-scan::before { content: "\ebc8"; }
+.ti-search::before { content: "\eb1c"; }
+.ti-send::before { content: "\eb1e"; }
+.ti-settings::before { content: "\eb20"; }
+.ti-shield::before { content: "\eb24"; }
+.ti-shield-check::before { content: "\eb22"; }
+.ti-shield-exclamation::before { content: "\f9c6"; }
+.ti-shield-lock::before { content: "\ed58"; }
+.ti-shield-plus::before { content: "\f9cb"; }
+.ti-shield-x::before { content: "\eb23"; }
+.ti-skull::before { content: "\f292"; }
+.ti-sparkles::before { content: "\f6d7"; }
+.ti-sun::before { content: "\eb30"; }
+.ti-timeline::before { content: "\f031"; }
+.ti-trash::before { content: "\eb41"; }
+.ti-upload::before { content: "\eb47"; }
+.ti-user::before { content: "\eb4d"; }
+.ti-user-check::before { content: "\eb49"; }
+.ti-user-exclamation::before { content: "\ec12"; }
+.ti-users::before { content: "\ebf2"; }
+.ti-video::before { content: "\ed22"; }
+.ti-video-off::before { content: "\ed20"; }
+.ti-volume::before { content: "\eb51"; }
+.ti-volume-3::before { content: "\eb50"; }
+.ti-walk::before { content: "\ec87"; }
+.ti-writing-sign::before { content: "\ef07"; }
+.ti-x::before { content: "\eb55"; }
