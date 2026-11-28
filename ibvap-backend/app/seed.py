@@ -21,10 +21,10 @@ INITIAL_CAMS = [
          online=True, priority="High", fps=15, night=False, scene="fence",
          geo="29.5481°N 74.8763°E", anchor={"left": 44, "top": 46, "w": 12, "h": 26},
          rtsp_url=""),
-    dict(id="cam-2", site_id="site-alpha", name="CAM-02 · Live RTSP Stream", location="Perimeter Sector — RTSP Ingest",
+    dict(id="cam-2", site_id="site-alpha", name="CAM-02 · Perimeter Fixture Stream", location="Perimeter Sector — Fixture Ingest",
          online=True, priority="High", fps=12, night=False, scene="gate",
          geo="29.5502°N 74.8791°E", anchor={"left": 41, "top": 52, "w": 18, "h": 24},
-         rtsp_url="rtsp://192.168.1.120:554/stream1"),
+         rtsp_url=""),
 ]
 
 INITIAL_FENCE_RULES = [

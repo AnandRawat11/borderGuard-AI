@@ -521,23 +521,29 @@ async def on_startup():
 
     # Auto-initialize workers for any RTSP cameras registered in DB
     active_worker_cams = set()
+    fixture_path = os.path.join(os.path.dirname(__file__), "..", "fixtures", "test_crossing.mp4")
+    is_dev_mode = os.getenv("IBVAP_ENV", "development").lower() != "production"
     try:
         startup_db = next(get_db())
         try:
             rtsp_cams = startup_db.query(models.Camera).filter(models.Camera.rtsp_url != None, models.Camera.rtsp_url != "").all()
             for rc in rtsp_cams:
-                if rc.online and rc.rtsp_url and rc.rtsp_url.strip():
-                    video_stream.get_or_create_worker(rc.id, rc.rtsp_url.strip())
+                url = (rc.rtsp_url or "").strip()
+                if is_dev_mode and url == "rtsp://192.168.1.120:554/stream1" and os.path.exists(fixture_path):
+                    continue
+                if rc.online and url:
+                    video_stream.get_or_create_worker(rc.id, url)
                     active_worker_cams.add(rc.id)
         finally:
             startup_db.close()
     except Exception as init_err:
         logger.warning(f"Failed to auto-start RTSP camera workers on startup: {init_err}")
 
-    # Start deterministic capture worker for test fixture if cam-1 has no active RTSP stream
-    fixture_path = os.path.join(os.path.dirname(__file__), "..", "fixtures", "test_crossing.mp4")
-    if "cam-1" not in active_worker_cams and os.path.exists(fixture_path):
-        video_stream.get_or_create_worker("cam-1", fixture_path)
+    # Start deterministic capture worker for test fixture on demo cameras without an active RTSP stream
+    if os.path.exists(fixture_path):
+        for demo_cam_id in ("cam-1", "cam-2"):
+            if demo_cam_id not in active_worker_cams:
+                video_stream.get_or_create_worker(demo_cam_id, fixture_path)
 
     # Synthetic periodic events are opt-in. Detector-backed camera workers
     # remain available regardless of this simulation setting.
@@ -640,7 +646,7 @@ def camera_to_out(c: models.Camera) -> schemas.CameraOut:
         geo=c.geo,
         anchor=anchor,
         rtsp_url=c.rtsp_url,
-        source_type=getattr(c, "source_type", "webcam" if c.id == "cam-1" else "rtsp"),
+        source_type=getattr(c, "source_type", "webcam" if c.id == "cam-1" else ("fixture" if not (c.rtsp_url or "").strip() else "rtsp")),
         supports_webcam=getattr(c, "supports_webcam", (c.id == "cam-1")),
         active_model_version=c.active_model_version,
         active_rule_version=c.active_rule_version
@@ -3247,7 +3253,7 @@ def ai_surveillance_briefing(
             "camera": a.cam_name,
             "location": a.location,
             "detail": security.decrypt_field(a.detail_enc) if a.detail_enc else "",
-            "ts": a.created_at.isoformat() if a.created_at else "unknown",
+            "ts": a.ts.isoformat() if a.ts else "unknown",
         })
 
     system_prompt = (

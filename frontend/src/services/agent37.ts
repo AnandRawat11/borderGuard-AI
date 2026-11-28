@@ -3,7 +3,14 @@
  * All calls include the JWT from localStorage (same auth pattern as the rest of IBVAP).
  */
 
-const BASE = 'http://localhost:8000';
+const getHost = (): string => {
+  if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+    return window.location.hostname;
+  }
+  return '127.0.0.1';
+};
+
+const BASE = (import.meta as any).env?.VITE_API_BASE || `http://${getHost()}:8000`;
 
 function resolveToken(token?: string): string | undefined {
   if (token) return token;

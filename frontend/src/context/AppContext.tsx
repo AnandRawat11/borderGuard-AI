@@ -22,7 +22,7 @@ export const TYPE_META: Record<string, TypeMeta> = {
 
 const DEMO_CAMS: Camera[] = [
   { id: 'cam-1', name: 'CAM-01 · Live Camera Feed', location: 'BOP Alpha — Tactical Sentry', online: true, priority: 'High', fps: 15, night: false, scene: 'fence', geo: '29.5481°N 74.8763°E', anchor: { left: 44, top: 46, w: 12, h: 26 }, rtspUrl: '', supportsWebcam: true, sourceType: 'webcam' },
-  { id: 'cam-2', name: 'CAM-02 · Live RTSP Stream', location: 'Perimeter Sector — RTSP Ingest', online: true, priority: 'High', fps: 12, night: false, scene: 'gate', geo: '29.5502°N 74.8791°E', anchor: { left: 41, top: 52, w: 18, h: 24 }, rtspUrl: 'rtsp://192.168.1.120:554/stream1', supportsWebcam: false, sourceType: 'rtsp' },
+  { id: 'cam-2', name: 'CAM-02 · Perimeter Fixture Stream', location: 'Perimeter Sector — Fixture Ingest', online: true, priority: 'High', fps: 12, night: false, scene: 'gate', geo: '29.5502°N 74.8791°E', anchor: { left: 41, top: 52, w: 18, h: 24 }, rtspUrl: '', supportsWebcam: false, sourceType: 'fixture' },
 ];
 
 let alertSeq = 1;
