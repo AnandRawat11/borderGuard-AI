@@ -223,22 +223,6 @@ export const Sidebar: React.FC = () => {
             </div>
           </div>
         </div>
-
-        <div className="p-2.5 border-t border-border-subtle flex items-center justify-between text-[11px] text-txt-muted">
-          {(!sidebarCollapsed || mobileMenuOpen) && (
-            <div className="text-[10px] text-txt-muted leading-tight overflow-hidden pr-1">
-              <span className="font-semibold text-txt-primary block truncate">IBVAP defense suite</span>
-            </div>
-          )}
-          <button
-            onClick={toggleSidebar}
-            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className="p-1.5 rounded-lg hover:bg-primary-surface/70 text-txt-muted hover:text-primary transition-colors mx-auto md:ml-auto cursor-pointer"
-          >
-            <i className={`ti ${sidebarCollapsed ? 'ti-chevron-right' : 'ti-chevron-left'} text-sm`} />
-          </button>
-        </div>
       </aside>
     </>
   );
